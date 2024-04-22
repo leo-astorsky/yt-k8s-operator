@@ -26,9 +26,6 @@ import (
 )
 
 const (
-	ytsaurusName = "testsaurus"
-	domain       = "testdomain"
-
 	scriptBefore = "SCRIPT"
 	scriptAfter  = "UPDATED SCRIPT"
 )
