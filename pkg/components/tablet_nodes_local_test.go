@@ -39,7 +39,7 @@ func (y *fakeYtsaurusForTnd) AreTabletCellsRemoved(context.Context) (bool, error
 }
 
 func TestTabletNodesFlow(t *testing.T) {
-	ctrl = gomock.NewController(t)
+	ctrl := gomock.NewController(t)
 	ytCli := mock_yt.NewMockClient(ctrl)
 	//ytCli.EXPECT().NodeExists(context.Background(), ypath.Path("//sys/tablet_cell_bundles/sys"), nil).Return(true, nil)
 	//count := 0

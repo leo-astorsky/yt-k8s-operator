@@ -46,8 +46,8 @@ func logComponentStatuses(
 	resource *ytv1.Ytsaurus,
 ) error {
 	logger := log.FromContext(ctx)
-	//logLine := logger.V(1).Info
-	logLine := fmt.Println
+	// logLine := logger.V(1).Info
+	logLine := println
 
 	var readyComponents []string
 	var notReadyComponents []string
