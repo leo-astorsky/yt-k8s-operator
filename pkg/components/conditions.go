@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,11 +38,11 @@ func not(condDep Condition) Condition {
 }
 func isTrue(cond ConditionName) Condition {
 	// '^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$' for conditions.
-	replaced := strings.Replace(string(cond), "-", "_", -1)
+	replaced := strings.ReplaceAll(string(cond), "-", "_")
 	return Condition{Name: ConditionName(replaced), Val: true}
 }
 
-// buildFinished means that component was fully built initally.
+// buildFinished means that component was fully built initially.
 func buildStarted(compName string) Condition {
 	return isTrue(ConditionName(fmt.Sprintf("%sBuildStarted", compName)))
 }
@@ -143,7 +143,7 @@ func (m *baseStateManager) updateStatusRetryOnConflict(ctx context.Context, chan
 	}
 
 	err := tryUpdate(m.ytsaurus)
-	if err == nil || !errors.IsConflict(err) {
+	if err == nil || !apierrors.IsConflict(err) {
 		return err
 	}
 

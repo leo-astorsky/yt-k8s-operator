@@ -15,7 +15,7 @@ import (
 
 var (
 	requeueNot = ctrl.Result{Requeue: false}
-	//requeueASAP  = ctrl.Result{Requeue: true}
+	// requeueASAP  = ctrl.Result{Requeue: true}
 	requeueSoon  = ctrl.Result{RequeueAfter: 1 * time.Second}
 	requeueLater = ctrl.Result{RequeueAfter: 1 * time.Minute}
 )
