@@ -682,9 +682,13 @@ func (g *Generator) GetUICustomConfig() ([]byte, error) {
 	if g.ytsaurus.Spec.UI == nil {
 		return []byte{}, nil
 	}
+	uiCustomSettings := UICustomSettings{
+		DirectDownload: g.ytsaurus.Spec.UI.DirectDownload,
+	}
 
 	c := UICustom{
 		OdinBaseUrl: g.ytsaurus.Spec.UI.OdinBaseUrl,
+		Settings:    uiCustomSettings,
 	}
 
 	return marshallYsonConfig(c)

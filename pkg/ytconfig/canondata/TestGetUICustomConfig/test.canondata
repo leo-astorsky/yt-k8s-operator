@@ -1,3 +1,6 @@
 {
     odinBaseUrl="http://odin-webservice.odin.svc.cluster.local";
+    uiSettings={
+        directDownload=%true;
+    };
 }

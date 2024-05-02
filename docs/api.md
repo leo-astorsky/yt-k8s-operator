@@ -1459,6 +1459,7 @@ _Appears in:_
 | `theme` _string_ |  | lavander |  |
 | `description` _string_ |  |  |  |
 | `group` _string_ |  |  |  |
+| `directDownload` _boolean_ | When this is set to false, UI will use backend for downloading instead of proxy. |  |  |
 
 
 #### UpdateFlow

@@ -513,8 +513,10 @@ func withUI(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 
 func withUICustom(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	odinUrl := "http://odin-webservice.odin.svc.cluster.local"
+	directDownload := true
 	ytsaurus.Spec.UI = &ytv1.UISpec{
-		OdinBaseUrl: &odinUrl,
+		OdinBaseUrl:    &odinUrl,
+		DirectDownload: &directDownload,
 	}
 	return ytsaurus
 }
