@@ -28603,6 +28603,12 @@ spec:
               useIpv6:
                 default: false
                 type: boolean
+              keepSocket:
+                default: true
+                type: boolean
+              forceTcp:
+                default: true
+                type: boolean
               usePorto:
                 default: false
                 type: boolean
