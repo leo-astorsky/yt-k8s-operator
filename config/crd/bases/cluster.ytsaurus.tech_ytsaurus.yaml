@@ -833,6 +833,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -996,6 +997,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -3186,6 +3188,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -3356,6 +3359,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -5551,6 +5555,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -5714,6 +5719,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -7953,6 +7959,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -8089,6 +8096,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -8267,6 +8275,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -10485,6 +10494,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -10657,6 +10667,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -12893,6 +12904,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -13056,6 +13068,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -15294,6 +15307,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -15466,6 +15480,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -17649,6 +17664,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -17812,6 +17828,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -19993,6 +20010,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -20156,6 +20174,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -22344,6 +22363,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -22518,6 +22538,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -24731,6 +24752,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -24894,6 +24916,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -27090,6 +27113,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -27262,6 +27286,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -29514,6 +29539,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -29684,6 +29710,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -31885,6 +31912,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -32065,6 +32093,7 @@ spec:
                             - trace
                             - debug
                             - info
+                            - warning
                             - error
                             type: string
                           name:
@@ -34458,6 +34487,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
@@ -34621,6 +34651,7 @@ spec:
                           - trace
                           - debug
                           - info
+                          - warning
                           - error
                           type: string
                         name:
