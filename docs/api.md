@@ -284,6 +284,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -322,6 +323,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
@@ -380,6 +382,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -472,6 +475,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
@@ -519,6 +523,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  | NodePort |  |
 | `httpNodePort` _integer_ |  |  |  |
@@ -630,6 +635,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -837,6 +843,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `cellTagMasterCaches` _integer_ |  |  |  |
 | `hostAddressesMasterCaches` _string array_ |  |  |  |
@@ -896,6 +903,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `cellTag` _integer_ |  |  |  |
 | `hostAddresses` _string array_ |  |  |  |
@@ -977,6 +985,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -1015,6 +1024,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -1053,6 +1063,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  |  |  |
 | `nodePort` _integer_ |  |  |  |
@@ -1166,6 +1177,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
@@ -1235,6 +1247,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `cellTagMasterCaches` _integer_ |  |  |  |
 | `hostAddressesMasterCaches` _string array_ |  |  |  |
@@ -1278,6 +1291,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -1409,6 +1423,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  |  |  |
 | `minPort` _integer_ |  | 32000 |  |
@@ -1468,6 +1483,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
@@ -1636,6 +1652,7 @@ _Appears in:_
 | `podLabels` _object (keys:string, values:string)_ |  |  |  |
 | `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
