@@ -5,7 +5,8 @@ import (
 	"path"
 
 	corev1 "k8s.io/api/core/v1"
-	ptr "k8s.io/utils/pointer" //nolint:staticcheck
+
+	"k8s.io/utils/ptr"
 
 	"go.ytsaurus.tech/yt/go/yson"
 
@@ -142,7 +143,7 @@ func (g *BaseGenerator) fillIOEngine(ioEngine **IOEngine) {
 		if *ioEngine == nil {
 			*ioEngine = &IOEngine{}
 		}
-		(*ioEngine).EnableSync = ptr.Bool(false)
+		(*ioEngine).EnableSync = ptr.To(false)
 	}
 }
 
@@ -169,7 +170,7 @@ func (g *BaseGenerator) fillAddressResolver(c *AddressResolver) {
 }
 
 func (g *BaseGenerator) fillSolomonExporter(c *SolomonExporter) {
-	c.Host = ptr.String("{POD_SHORT_HOSTNAME}")
+	c.Host = ptr.To("{POD_SHORT_HOSTNAME}")
 	c.InstanceTags = map[string]string{
 		"pod": "{K8S_POD_NAME}",
 	}
@@ -338,7 +339,7 @@ func (g *Generator) getMasterConfigImpl(spec *ytv1.MastersSpec) (MasterServer, e
 	configureMasterServerCypressManager(g.GetMaxReplicationFactor(), &c.CypressManager)
 
 	// COMPAT(l0kix2): remove that after we drop support for specifying host network without master host addresses.
-	if ptr.BoolDeref(spec.HostNetwork, g.ytsaurus.Spec.HostNetwork) && len(spec.HostAddresses) == 0 {
+	if ptr.Deref(spec.HostNetwork, g.ytsaurus.Spec.HostNetwork) && len(spec.HostAddresses) == 0 {
 		// Each master deduces its index within cell by looking up his FQDN in the
 		// list of all master peers. Master peers are specified using their pod addresses,
 		// therefore we must also switch masters from identifying themselves by FQDN addresses
@@ -346,7 +347,7 @@ func (g *Generator) getMasterConfigImpl(spec *ytv1.MastersSpec) (MasterServer, e
 
 		// POD_NAME is set to pod name through downward API env var and substituted during
 		// config postprocessing.
-		c.AddressResolver.LocalhostNameOverride = ptr.String(
+		c.AddressResolver.LocalhostNameOverride = ptr.To(
 			fmt.Sprintf("%v.%v", "{K8S_POD_NAME}", g.getMasterPodFqdnSuffix()))
 	}
 
@@ -381,7 +382,7 @@ func (g *Generator) getSchedulerConfigImpl(spec *ytv1.SchedulersSpec) (Scheduler
 	}
 
 	if g.ytsaurus.Spec.TabletNodes == nil || len(g.ytsaurus.Spec.TabletNodes) == 0 {
-		c.Scheduler.OperationsCleaner.EnableOperationArchivation = ptr.Bool(false)
+		c.Scheduler.OperationsCleaner.EnableOperationArchivation = ptr.To(false)
 	}
 	g.fillCommonService(&c.CommonServer, &spec.InstanceSpec)
 	g.fillBusServer(&c.CommonServer, spec.NativeTransport)
@@ -420,7 +421,7 @@ func (g *Generator) getRPCProxyConfigImpl(spec *ytv1.RPCProxiesSpec) (RPCProxySe
 			UserInfoErrorField: g.ytsaurus.Spec.OauthService.UserInfo.ErrorField,
 		}
 		c.OauthTokenAuthenticator = &OauthTokenAuthenticator{}
-		c.RequireAuthentication = ptr.Bool(true)
+		c.RequireAuthentication = ptr.To(true)
 	}
 
 	return c, nil
