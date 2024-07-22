@@ -33234,7 +33234,7 @@ spec:
                 default: true
                 type: boolean
               forceTcp:
-                default: true
+                default: false
                 type: boolean
               usePorto:
                 default: false
