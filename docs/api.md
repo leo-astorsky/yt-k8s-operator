@@ -234,6 +234,8 @@ _Appears in:_
 | `ephemeralCluster` _boolean_ | Allow prioritizing performance over data safety. Useful for tests and experiments. | false |  |
 | `useIpv6` _boolean_ |  | false |  |
 | `useIpv4` _boolean_ |  | false |  |
+| `keepSocket` _boolean_ |  | true |  |
+| `forceTcp` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
 | `usePorto` _boolean_ |  | false |  |
 | `hostNetwork` _boolean_ |  | false |  |
@@ -1080,6 +1082,8 @@ _Appears in:_
 | `ephemeralCluster` _boolean_ | Allow prioritizing performance over data safety. Useful for tests and experiments. | false |  |
 | `useIpv6` _boolean_ |  | false |  |
 | `useIpv4` _boolean_ |  | false |  |
+| `keepSocket` _boolean_ |  | true |  |
+| `forceTcp` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
 | `usePorto` _boolean_ |  | false |  |
 | `hostNetwork` _boolean_ |  | false |  |
@@ -1593,6 +1597,8 @@ _Appears in:_
 | `ephemeralCluster` _boolean_ | Allow prioritizing performance over data safety. Useful for tests and experiments. | false |  |
 | `useIpv6` _boolean_ |  | false |  |
 | `useIpv4` _boolean_ |  | false |  |
+| `keepSocket` _boolean_ |  | true |  |
+| `forceTcp` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
 | `usePorto` _boolean_ |  | false |  |
 | `hostNetwork` _boolean_ |  | false |  |
