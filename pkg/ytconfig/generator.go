@@ -146,8 +146,10 @@ func (g *BaseGenerator) fillAddressResolver(c *AddressResolver) {
 
 	c.EnableIPv4 = g.commonSpec.UseIPv4
 	c.EnableIPv6 = g.commonSpec.UseIPv6
-	c.KeepSocket = true // g.ytsaurus.Spec.KeepSocket
-	c.ForceTcp = true   // g.ytsaurus.Spec.ForceTcp
+	c.KeepSocket = g.commonSpec.KeepSocket
+	c.ForceTcp = g.commonSpec.ForceTcp
+	// c.KeepSocket = true // g.commonSpec.KeepSocket
+	// c.ForceTcp = true   // g.commonSpec.ForceTcp
 	if !c.EnableIPv6 && !c.EnableIPv4 {
 		// In case when nothing is specified, we prefer IPv4 due to compatibility reasons.
 		c.EnableIPv4 = true
