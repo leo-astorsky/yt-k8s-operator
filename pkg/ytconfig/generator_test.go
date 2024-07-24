@@ -446,6 +446,8 @@ func withOauthSpec(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 func withResolverConfigured(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.UseIPv4 = true
 	ytsaurus.Spec.UseIPv6 = false
+	ytsaurus.Spec.KeepSocket = true
+	ytsaurus.Spec.ForceTcp = false
 	return ytsaurus
 }
 

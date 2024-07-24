@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	ptr "k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.ytsaurus.tech/yt/go/yson"
 
@@ -142,8 +143,11 @@ func (g *Generator) fillDriver(c *Driver) {
 }
 
 func (g *BaseGenerator) fillAddressResolver(c *AddressResolver) {
+	logger := log.Log
 	var retries = 1000
 
+	logger.Info("fill ar")
+	fmt.Printf("%+v\n", g)
 	c.EnableIPv4 = g.commonSpec.UseIPv4
 	c.EnableIPv6 = g.commonSpec.UseIPv6
 	c.KeepSocket = g.commonSpec.KeepSocket
