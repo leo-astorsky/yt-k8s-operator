@@ -1127,6 +1127,12 @@ spec:
               useIpv4:
                 default: false
                 type: boolean
+              forceTcp:
+                default: false
+                type: boolean
+              keepSocket:
+                default: true
+                type: boolean
               useIpv6:
                 default: false
                 type: boolean
