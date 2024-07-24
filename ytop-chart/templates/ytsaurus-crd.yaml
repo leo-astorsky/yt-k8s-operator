@@ -34376,6 +34376,12 @@ spec:
               useIpv6:
                 default: false
                 type: boolean
+              keepSocket:
+                default: true
+                type: boolean
+              forceTcp:
+                default: false
+                type: boolean
               usePorto:
                 default: false
                 type: boolean
