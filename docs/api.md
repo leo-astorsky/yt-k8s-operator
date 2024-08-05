@@ -1666,7 +1666,8 @@ Ytsaurus is the Schema for the ytsaurus API
 
 
 
-
+_Appears in:_
+- [YtsaurusValidator](#ytsaurusvalidator)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1730,6 +1731,8 @@ _Appears in:_
 | `yqlAgents` _[YQLAgentSpec](#yqlagentspec)_ |  |  |  |
 | `queueAgents` _[QueueAgentSpec](#queueagentspec)_ |  |  |  |
 | `ui` _[UISpec](#uispec)_ |  |  |  |
+
+
 
 
 
