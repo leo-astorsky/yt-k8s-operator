@@ -10035,6 +10035,9 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+              forceTcp:
+                default: false
+                type: boolean
               hostNetwork:
                 default: false
                 description: Use the host's network namespace for all components.
@@ -12506,6 +12509,9 @@ spec:
               jobImage:
                 description: Default docker image for user jobs.
                 type: string
+              keepSocket:
+                default: true
+                type: boolean
               masterCaches:
                 properties:
                   affinity:
@@ -34599,12 +34605,6 @@ spec:
                 default: false
                 type: boolean
               useIpv6:
-                default: false
-                type: boolean
-              keepSocket:
-                default: true
-                type: boolean
-              forceTcp:
                 default: false
                 type: boolean
               usePorto:
