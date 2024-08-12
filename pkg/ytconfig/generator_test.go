@@ -667,7 +667,9 @@ func getTCPProxySpec() ytv1.TCPProxiesSpec {
 
 func getCommonSpec() ytv1.CommonSpec {
 	return ytv1.CommonSpec{
-		UseIPv6: true,
+		UseIPv6:    true,
+		KeepSocket: true,
+		ForceTcp:   false,
 	}
 }
 
