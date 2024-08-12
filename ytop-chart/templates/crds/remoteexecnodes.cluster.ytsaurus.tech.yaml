@@ -700,6 +700,9 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+              forceTcp:
+                default: false
+                type: boolean
               hostNetwork:
                 default: false
                 description: Use the host's network namespace for all components.
@@ -912,6 +915,9 @@ spec:
                       resources required.
                     type: object
                 type: object
+              keepSocket:
+                default: true
+                type: boolean
               locations:
                 items:
                   properties:
@@ -1259,12 +1265,6 @@ spec:
                 type: array
               useIpv4:
                 default: false
-                type: boolean
-              forceTcp:
-                default: false
-                type: boolean
-              keepSocket:
-                default: true
                 type: boolean
               useIpv6:
                 default: false
