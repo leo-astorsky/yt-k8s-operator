@@ -3,16 +3,16 @@ package components
 import (
 	"context"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
 
 	corev1 "k8s.io/api/core/v1"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type HttpProxy struct {
@@ -32,7 +32,6 @@ func NewHTTPProxy(
 	ytsaurus *apiproxy.Ytsaurus,
 	masterReconciler Component,
 	spec ytv1.HTTPProxiesSpec) *HttpProxy {
-
 	resource := ytsaurus.GetResource()
 	l := labeller.Labeller{
 		ObjectMeta:     &resource.ObjectMeta,
@@ -42,7 +41,7 @@ func NewHTTPProxy(
 	}
 
 	if spec.InstanceSpec.MonitoringPort == nil {
-		spec.InstanceSpec.MonitoringPort = ptr.Int32(consts.HTTPProxyMonitoringPort)
+		spec.InstanceSpec.MonitoringPort = ptr.To(int32(consts.HTTPProxyMonitoringPort))
 	}
 
 	srv := newServer(
@@ -56,6 +55,25 @@ func NewHTTPProxy(
 		func() ([]byte, error) {
 			return cfgen.GetHTTPProxyConfig(spec)
 		},
+		WithContainerPorts(
+			corev1.ContainerPort{
+				Name:          consts.YTRPCPortName,
+				ContainerPort: consts.HTTPProxyRPCPort,
+				Protocol:      corev1.ProtocolTCP,
+			},
+			corev1.ContainerPort{
+				Name:          "http",
+				ContainerPort: consts.HTTPProxyHTTPPort,
+				Protocol:      corev1.ProtocolTCP,
+			},
+			corev1.ContainerPort{
+				Name:          "https",
+				ContainerPort: consts.HTTPProxyHTTPSPort,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		),
+		WithCustomReadinessProbeEndpointPort(consts.HTTPProxyHTTPPort),
+		WithCustomReadinessProbeEndpointPath("/ping"),
 	)
 
 	var httpsSecret *resources.TLSSecret

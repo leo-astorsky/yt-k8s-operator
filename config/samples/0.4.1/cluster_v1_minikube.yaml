@@ -3,7 +3,7 @@ kind: Ytsaurus
 metadata:
   name: minisaurus
 spec:
-  coreImage: ytsaurus/ytsaurus:stable-23.1.0-relwithdebinfo
+  coreImage: mirror.gcr.io/ytsaurus/ytsaurus:stable-23.1.0-relwithdebinfo
 
   discovery:
     instanceCount: 1
@@ -122,12 +122,12 @@ spec:
     loggers: *loggers
 
   ui:
-    image: ytsaurus/ui:stable
+    image: mirror.gcr.io/ytsaurus/ui:stable
     serviceType: NodePort
     instanceCount: 1
 
   strawberry:
-    image: ytsaurus/strawberry:0.0.5
+    image: mirror.gcr.io/ytsaurus/strawberry:0.0.5
     resources:
       limits:
         memory: 100Mi

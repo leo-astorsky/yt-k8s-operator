@@ -5,12 +5,13 @@ import (
 	"path"
 
 	corev1 "k8s.io/api/core/v1"
-	ptr "k8s.io/utils/pointer"
+
+	"k8s.io/utils/ptr"
 
 	"go.ytsaurus.tech/yt/go/yson"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
 )
 
 type ConfigFormat string
@@ -111,6 +112,19 @@ func (g *Generator) GetYQLAgentAddresses() []string {
 	return names
 }
 
+func (g *Generator) GetQueryTrackerAddresses() []string {
+	names := make([]string, 0, g.ytsaurus.Spec.QueryTrackers.InstanceCount)
+	for _, podName := range g.GetQueryTrackerPodNames() {
+		names = append(names, fmt.Sprintf("%s.%s.%s.svc.%s:%d",
+			podName,
+			g.GetQueryTrackerServiceName(),
+			g.ytsaurus.Namespace,
+			g.clusterDomain,
+			consts.QueryTrackerRPCPort))
+	}
+	return names
+}
+
 func (g *Generator) GetQueueAgentAddresses() []string {
 	names := make([]string, 0, g.ytsaurus.Spec.QueueAgents.InstanceCount)
 	for _, podName := range g.GetQueueAgentPodNames() {
@@ -129,7 +143,7 @@ func (g *BaseGenerator) fillIOEngine(ioEngine **IOEngine) {
 		if *ioEngine == nil {
 			*ioEngine = &IOEngine{}
 		}
-		(*ioEngine).EnableSync = ptr.Bool(false)
+		(*ioEngine).EnableSync = ptr.To(false)
 	}
 }
 
@@ -153,6 +167,13 @@ func (g *BaseGenerator) fillAddressResolver(c *AddressResolver) {
 		c.EnableIPv4 = true
 	}
 	c.Retries = &retries
+}
+
+func (g *BaseGenerator) fillSolomonExporter(c *SolomonExporter) {
+	c.Host = ptr.To("{POD_SHORT_HOSTNAME}")
+	c.InstanceTags = map[string]string{
+		"pod": "{K8S_POD_NAME}",
+	}
 }
 
 func (g *BaseGenerator) fillPrimaryMaster(c *MasterCell) {
@@ -179,12 +200,15 @@ func (g *BaseGenerator) fillCypressAnnotations(c *map[string]any) {
 		"k8s_pod_name":      "{K8S_POD_NAME}",
 		"k8s_pod_namespace": "{K8S_POD_NAMESPACE}",
 		"k8s_node_name":     "{K8S_NODE_NAME}",
+		// for CMS and UI сompatibility
+		"physical_host": "{K8S_NODE_NAME}",
 	}
 }
 
 func (g *BaseGenerator) fillCommonService(c *CommonServer, s *ytv1.InstanceSpec) {
 	// ToDo(psushin): enable porto resource tracker?
 	g.fillAddressResolver(&c.AddressResolver)
+	g.fillSolomonExporter(&c.SolomonExporter)
 	g.fillClusterConnection(&c.ClusterConnection, s.NativeTransport)
 	g.fillCypressAnnotations(&c.CypressAnnotations)
 	c.TimestampProviders.Addresses = g.getMasterAddresses()
@@ -315,7 +339,7 @@ func (g *Generator) getMasterConfigImpl(spec *ytv1.MastersSpec) (MasterServer, e
 	configureMasterServerCypressManager(g.GetMaxReplicationFactor(), &c.CypressManager)
 
 	// COMPAT(l0kix2): remove that after we drop support for specifying host network without master host addresses.
-	if g.ytsaurus.Spec.HostNetwork && len(spec.HostAddresses) == 0 {
+	if ptr.Deref(spec.HostNetwork, g.ytsaurus.Spec.HostNetwork) && len(spec.HostAddresses) == 0 {
 		// Each master deduces its index within cell by looking up his FQDN in the
 		// list of all master peers. Master peers are specified using their pod addresses,
 		// therefore we must also switch masters from identifying themselves by FQDN addresses
@@ -323,7 +347,7 @@ func (g *Generator) getMasterConfigImpl(spec *ytv1.MastersSpec) (MasterServer, e
 
 		// POD_NAME is set to pod name through downward API env var and substituted during
 		// config postprocessing.
-		c.AddressResolver.LocalhostNameOverride = ptr.String(
+		c.AddressResolver.LocalhostNameOverride = ptr.To(
 			fmt.Sprintf("%v.%v", "{K8S_POD_NAME}", g.getMasterPodFqdnSuffix()))
 	}
 
@@ -358,7 +382,7 @@ func (g *Generator) getSchedulerConfigImpl(spec *ytv1.SchedulersSpec) (Scheduler
 	}
 
 	if g.ytsaurus.Spec.TabletNodes == nil || len(g.ytsaurus.Spec.TabletNodes) == 0 {
-		c.Scheduler.OperationsCleaner.EnableOperationArchivation = ptr.Bool(false)
+		c.Scheduler.OperationsCleaner.EnableOperationArchivation = ptr.To(false)
 	}
 	g.fillCommonService(&c.CommonServer, &spec.InstanceSpec)
 	g.fillBusServer(&c.CommonServer, spec.NativeTransport)
@@ -397,7 +421,7 @@ func (g *Generator) getRPCProxyConfigImpl(spec *ytv1.RPCProxiesSpec) (RPCProxySe
 			UserInfoErrorField: g.ytsaurus.Spec.OauthService.UserInfo.ErrorField,
 		}
 		c.OauthTokenAuthenticator = &OauthTokenAuthenticator{}
-		c.RequireAuthentication = ptr.Bool(true)
+		c.RequireAuthentication = ptr.To(true)
 	}
 
 	return c, nil
@@ -662,6 +686,8 @@ func (g *Generator) GetUIClustersConfig() ([]byte, error) {
 	c.ID = g.ytsaurus.Name
 	c.Name = g.ytsaurus.Name
 	c.Proxy = g.GetHTTPProxiesAddress(consts.DefaultHTTPProxyRole)
+	c.Secure = g.ytsaurus.Spec.UI.Secure
+	c.ExternalProxy = g.ytsaurus.Spec.UI.ExternalProxy
 	c.PrimaryMaster.CellTag = g.ytsaurus.Spec.PrimaryMasters.CellTag
 
 	c.Theme = g.ytsaurus.Spec.UI.Theme
@@ -678,6 +704,16 @@ func (g *Generator) GetUIClustersConfig() ([]byte, error) {
 	})
 }
 
+func (g *Generator) GetUICustomSettings() *UICustomSettings {
+	directDownload := g.ytsaurus.Spec.UI.DirectDownload
+	if directDownload == nil {
+		return nil
+	}
+	return &UICustomSettings{
+		DirectDownload: directDownload,
+	}
+}
+
 func (g *Generator) GetUICustomConfig() ([]byte, error) {
 	if g.ytsaurus.Spec.UI == nil {
 		return []byte{}, nil
@@ -685,6 +721,7 @@ func (g *Generator) GetUICustomConfig() ([]byte, error) {
 
 	c := UICustom{
 		OdinBaseUrl: g.ytsaurus.Spec.UI.OdinBaseUrl,
+		Settings:    g.GetUICustomSettings(),
 	}
 
 	return marshallYsonConfig(c)

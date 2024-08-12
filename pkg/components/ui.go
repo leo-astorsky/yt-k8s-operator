@@ -10,12 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type UI struct {
@@ -25,6 +25,7 @@ type UI struct {
 	initJob      *InitJob
 	master       Component
 	secret       *resources.StringSecret
+	caBundle     *resources.CABundle
 }
 
 const UIClustersConfigFileName = "clusters-config.json"
@@ -43,6 +44,11 @@ func NewUI(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus, master Compon
 	image := resource.Spec.UIImage
 	if resource.Spec.UI.Image != nil {
 		image = *resource.Spec.UI.Image
+	}
+
+	var caBundle *resources.CABundle
+	if caBundleSpec := resource.Spec.CABundle; caBundleSpec != nil {
+		caBundle = resources.NewCABundle(caBundleSpec.Name, consts.CABundleVolumeName, consts.CABundleMountPoint)
 	}
 
 	microservice := newMicroservice(
@@ -82,7 +88,8 @@ func NewUI(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus, master Compon
 			l.GetSecretName(),
 			&l,
 			ytsaurus.APIProxy()),
-		master: master,
+		caBundle: caBundle,
+		master:   master,
 	}
 }
 
@@ -93,7 +100,6 @@ func (u *UI) IsUpdatable() bool {
 func (u *UI) GetType() consts.ComponentType { return consts.UIType }
 
 func (u *UI) Fetch(ctx context.Context) error {
-
 	return resources.Fetch(ctx,
 		u.microservice,
 		u.initJob,
@@ -166,6 +172,13 @@ func (u *UI) syncComponents(ctx context.Context) (err error) {
 		env = append(env, corev1.EnvVar{
 			Name:  "YT_AUTH_ALLOW_INSECURE",
 			Value: "1",
+		})
+	}
+
+	if u.caBundle != nil {
+		env = append(env, corev1.EnvVar{
+			Name:  "NODE_EXTRA_CA_CERTS",
+			Value: fmt.Sprintf("%s/ca.crt", u.caBundle.MountPath),
 		})
 	}
 
@@ -242,6 +255,13 @@ func (u *UI) syncComponents(ctx context.Context) (err error) {
 		},
 	}
 
+	if u.caBundle != nil {
+		u.caBundle.AddVolume(&deployment.Spec.Template.Spec)
+		for i := range deployment.Spec.Template.Spec.Containers {
+			u.caBundle.AddVolumeMount(&deployment.Spec.Template.Spec.Containers[i])
+		}
+	}
+
 	return u.microservice.Sync(ctx)
 }
 
@@ -254,7 +274,6 @@ func (u *UI) doSync(ctx context.Context, dry bool) (ComponentStatus, error) {
 
 	if u.ytsaurus.GetClusterState() == ytv1.ClusterStateUpdating {
 		if IsUpdatingComponent(u.ytsaurus, u) {
-
 			if u.ytsaurus.GetUpdateState() == ytv1.UpdateStateWaitingForPodsRemoval {
 				if !dry {
 					err = removePods(ctx, u.microservice, &u.localComponent)

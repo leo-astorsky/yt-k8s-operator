@@ -23,7 +23,7 @@ import (
 
 	"go.uber.org/zap/zapcore"
 
-	"github.com/ytsaurus/yt-k8s-operator/controllers"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/controllers"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -39,7 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -98,7 +98,9 @@ func main() {
 	}
 
 	watchNamespace, ok := os.LookupEnv("WATCH_NAMESPACE")
-	if ok {
+	// We can't setup managerOptions.Cache.DefaultNamespaces = map[cache.AllNamespaces]cache.Config{} due to
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/2628
+	if ok && watchNamespace != "" {
 		managerOptions.Cache.DefaultNamespaces = map[string]cache.Config{}
 		if strings.Contains(watchNamespace, ",") {
 			for _, namespace := range strings.Split(watchNamespace, ",") {
@@ -106,6 +108,7 @@ func main() {
 			}
 		} else {
 			managerOptions.Cache.DefaultNamespaces[watchNamespace] = cache.Config{}
+			managerOptions.LeaderElectionNamespace = watchNamespace
 		}
 	}
 

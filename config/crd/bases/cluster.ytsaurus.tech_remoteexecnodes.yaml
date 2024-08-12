@@ -8,6 +8,9 @@ metadata:
 spec:
   group: cluster.ytsaurus.tech
   names:
+    categories:
+    - ytsaurus-all
+    - yt-all
     kind: RemoteExecNodes
     listKind: RemoteExecNodesList
     plural: remoteexecnodes
@@ -234,11 +237,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -273,11 +278,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -344,11 +351,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -383,11 +392,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -452,11 +463,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -491,11 +504,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -562,11 +577,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -601,11 +618,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -675,6 +694,7 @@ spec:
                 type: boolean
               hostNetwork:
                 default: false
+                description: Use the host's network namespace for all components.
                 type: boolean
               image:
                 description: Overrides coreImage for component.
@@ -693,6 +713,11 @@ spec:
                   type: object
                   x-kubernetes-map-type: atomic
                 type: array
+              initContainers:
+                description: List of init containers as yaml of core/v1 Container.
+                items:
+                  type: string
+                type: array
               instanceCount:
                 format: int32
                 type: integer
@@ -702,6 +727,9 @@ spec:
                     description: CRI service configuration for running jobs in sidecar
                       container.
                     properties:
+                      alwaysPullLatestImage:
+                        description: Always pull "latest" images.
+                        type: boolean
                       apiRetryTimeoutSeconds:
                         description: Timeout for retrying CRI API calls.
                         format: int32
@@ -718,6 +746,23 @@ spec:
                         items:
                           type: string
                         type: array
+                      imageCompressionRatioEstimation:
+                        description: Multiplier for image size to account space used
+                          by unpacked images.
+                        format: int32
+                        type: integer
+                      imagePullPeriodSeconds:
+                        description: Pull images periodically.
+                        format: int32
+                        type: integer
+                      imageSizeEstimation:
+                        description: Initial estimation for space required for pulling
+                          image into cache.
+                        format: int64
+                        type: integer
+                      registryConfigPath:
+                        description: 'See: https://github.com/containerd/containerd/blob/main/docs/hosts.md'
+                        type: string
                       sandboxImage:
                         description: Sandbox (pause) image.
                         type: string
@@ -781,6 +826,7 @@ spec:
                       - trace
                       - debug
                       - info
+                      - warning
                       - error
                       type: string
                     name:
@@ -792,11 +838,17 @@ spec:
                           format: int64
                           type: integer
                         maxSegmentSize:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         maxTotalSizeToKeep:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         rotationPeriodMilliseconds:
                           format: int64
                           type: integer
@@ -862,12 +914,32 @@ spec:
                       description: LocationType string describes types of disk locations
                         for YT components.
                       type: string
+                    lowWatermark:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Limit above which the volume is considered to be
+                        non-full.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    maxTrashMilliseconds:
+                      description: Max TTL of trash in milliseconds.
+                      format: int64
+                      minimum: 60000
+                      type: integer
                     medium:
                       default: default
                       type: string
                     path:
                       minLength: 1
                       type: string
+                    quota:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Disk space quota, default is size of related volume.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
                   type: object
                 type: array
               loggers:
@@ -910,6 +982,7 @@ spec:
                       - trace
                       - debug
                       - info
+                      - warning
                       - error
                       type: string
                     name:
@@ -921,11 +994,17 @@ spec:
                           format: int64
                           type: integer
                         maxSegmentSize:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         maxTotalSizeToKeep:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         rotationPeriodMilliseconds:
                           format: int64
                           type: integer
@@ -976,6 +1055,14 @@ spec:
                     x-kubernetes-map-type: atomic
                 type: object
               nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
+              podAnnotations:
+                additionalProperties:
+                  type: string
+                type: object
+              podLabels:
                 additionalProperties:
                   type: string
                 type: object
@@ -1056,8 +1143,13 @@ spec:
                 type: object
               runtimeClassName:
                 type: string
+              setHostnameAsFqdn:
+                default: true
+                description: SetHostnameAsFQDN indicates whether to set the hostname
+                  as FQDN.
+                type: boolean
               sidecars:
-                description: List of sidecar containers as yaml of corev1.Container.
+                description: List of sidecar containers as yaml of core/v1 Container.
                 items:
                   type: string
                 type: array
@@ -1088,6 +1180,7 @@ spec:
                       - trace
                       - debug
                       - info
+                      - warning
                       - error
                       type: string
                     name:
@@ -1099,11 +1192,17 @@ spec:
                           format: int64
                           type: integer
                         maxSegmentSize:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         maxTotalSizeToKeep:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         rotationPeriodMilliseconds:
                           format: int64
                           type: integer
@@ -1118,6 +1217,11 @@ spec:
                 items:
                   type: string
                 type: array
+              terminationGracePeriodSeconds:
+                description: Optional duration in seconds the pod needs to terminate
+                  gracefully.
+                format: int64
+                type: integer
               tolerations:
                 items:
                   description: |-
@@ -1314,11 +1418,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -1828,11 +1934,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string

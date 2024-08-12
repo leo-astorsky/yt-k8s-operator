@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"strings"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
+
 	"go.ytsaurus.tech/yt/go/yson"
 	"go.ytsaurus.tech/yt/go/yt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 const (
@@ -43,7 +44,7 @@ func NewMaster(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus) *Master {
 	}
 
 	if resource.Spec.PrimaryMasters.InstanceSpec.MonitoringPort == nil {
-		resource.Spec.PrimaryMasters.InstanceSpec.MonitoringPort = ptr.Int32(consts.MasterMonitoringPort)
+		resource.Spec.PrimaryMasters.InstanceSpec.MonitoringPort = ptr.To(int32(consts.MasterMonitoringPort))
 	}
 
 	srv := newServer(
@@ -55,6 +56,11 @@ func NewMaster(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus) *Master {
 		cfgen.GetMastersStatefulSetName(),
 		cfgen.GetMastersServiceName(),
 		func() ([]byte, error) { return cfgen.GetMasterConfig(&resource.Spec.PrimaryMasters) },
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.MasterRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	initJob := NewInitJob(
@@ -327,7 +333,13 @@ func (m *Master) Sync(ctx context.Context) error {
 
 func (m *Master) doServerSync(ctx context.Context) error {
 	statefulSet := m.server.buildStatefulSet()
+	podSpec := &statefulSet.Spec.Template.Spec
 	primaryMastersSpec := m.ytsaurus.GetResource().Spec.PrimaryMasters
+
+	if err := AddSidecarsToPodSpec(primaryMastersSpec.Sidecars, podSpec); err != nil {
+		return err
+	}
+
 	if len(primaryMastersSpec.HostAddresses) != 0 {
 		AddAffinity(statefulSet, m.getHostAddressLabel(), primaryMastersSpec.HostAddresses)
 	}
@@ -346,14 +358,14 @@ func (m *Master) exitReadOnly(ctx context.Context, dry bool) (*ComponentStatus, 
 	if !m.ytsaurus.IsUpdateStatusConditionTrue(consts.ConditionMasterExitReadOnlyPrepared) {
 		if !m.exitReadOnlyJob.isRestartPrepared() {
 			if err := m.exitReadOnlyJob.prepareRestart(ctx, dry); err != nil {
-				return ptr.T(SimpleStatus(SyncStatusUpdating)), err
+				return ptr.To(SimpleStatus(SyncStatusUpdating)), err
 			}
 		}
 
 		if !dry {
 			m.setMasterReadOnlyExitPrepared(ctx, metav1.ConditionTrue)
 		}
-		return ptr.T(SimpleStatus(SyncStatusUpdating)), nil
+		return ptr.To(SimpleStatus(SyncStatusUpdating)), nil
 	}
 
 	if !m.exitReadOnlyJob.IsCompleted() {
@@ -373,7 +385,7 @@ func (m *Master) exitReadOnly(ctx context.Context, dry bool) (*ComponentStatus, 
 		})
 		m.setMasterReadOnlyExitPrepared(ctx, metav1.ConditionFalse)
 	}
-	return ptr.T(SimpleStatus(SyncStatusUpdating)), nil
+	return ptr.To(SimpleStatus(SyncStatusUpdating)), nil
 }
 
 func (m *Master) setMasterReadOnlyExitPrepared(ctx context.Context, status metav1.ConditionStatus) {

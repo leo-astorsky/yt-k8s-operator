@@ -3,12 +3,12 @@ package ytconfig
 import (
 	"path"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
 )
 
-func getContainerdSocketPath(spec *ytv1.ExecNodesSpec) string {
+func GetContainerdSocketPath(spec *ytv1.ExecNodesSpec) string {
 	if location := ytv1.FindFirstLocation(spec.Locations, ytv1.LocationTypeImageCache); location != nil {
 		return path.Join(location.Path, consts.ContainerdSocketName)
 	}
@@ -17,7 +17,6 @@ func getContainerdSocketPath(spec *ytv1.ExecNodesSpec) string {
 }
 
 func (g *NodeGenerator) GetContainerdConfig(spec *ytv1.ExecNodesSpec) ([]byte, error) {
-
 	criSpec := spec.JobEnvironment.CRI
 
 	var rootPath *string
@@ -30,7 +29,7 @@ func (g *NodeGenerator) GetContainerdConfig(spec *ytv1.ExecNodesSpec) ([]byte, e
 		"root":    rootPath,
 
 		"grpc": map[string]any{
-			"address": getContainerdSocketPath(spec),
+			"address": GetContainerdSocketPath(spec),
 			"uid":     0,
 			"gid":     0,
 		},
@@ -57,6 +56,10 @@ func (g *NodeGenerator) GetContainerdConfig(spec *ytv1.ExecNodesSpec) ([]byte, e
 							},
 						},
 					},
+				},
+
+				"registry": map[string]any{
+					"config_path": criSpec.RegistryConfigPath,
 				},
 			},
 		},

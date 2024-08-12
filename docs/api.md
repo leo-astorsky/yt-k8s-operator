@@ -33,7 +33,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ |  |  | MinLength: 1 <br /> |
 | `format` _[LogFormat](#logformat)_ |  | plain_text | Enum: [plain_text json yson] <br /> |
-| `minLogLevel` _[LogLevel](#loglevel)_ |  | info | Enum: [trace debug info error] <br /> |
+| `minLogLevel` _[LogLevel](#loglevel)_ |  | info | Enum: [trace debug info warning error] <br /> |
 | `compression` _[LogCompression](#logcompression)_ |  | none | Enum: [none gzip zstd] <br /> |
 | `useTimestampSuffix` _boolean_ |  | false |  |
 | `rotationPolicy` _[LogRotationPolicy](#logrotationpolicy)_ |  |  |  |
@@ -108,6 +108,11 @@ _Appears in:_
 | `apiRetryTimeoutSeconds` _integer_ | Timeout for retrying CRI API calls. |  |  |
 | `criNamespace` _string_ | CRI namespace for jobs containers. |  |  |
 | `baseCgroup` _string_ | Base cgroup for jobs. |  |  |
+| `registryConfigPath` _string_ | See: https://github.com/containerd/containerd/blob/main/docs/hosts.md |  |  |
+| `imageSizeEstimation` _integer_ | Initial estimation for space required for pulling image into cache. |  |  |
+| `imageCompressionRatioEstimation` _integer_ | Multiplier for image size to account space used by unpacked images. |  |  |
+| `alwaysPullLatestImage` _boolean_ | Always pull "latest" images. |  |  |
+| `imagePullPeriodSeconds` _integer_ | Pull images periodically. |  |  |
 
 
 #### CategoriesFilter
@@ -237,8 +242,8 @@ _Appears in:_
 | `keepSocket` _boolean_ |  | true |  |
 | `forceTcp` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace for all components. | false |  |
 | `usePorto` _boolean_ |  | false |  |
-| `hostNetwork` _boolean_ |  | false |  |
 | `extraPodAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `configOverrides` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core) array_ |  |  |  |
@@ -269,12 +274,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -303,12 +313,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
@@ -357,12 +372,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -445,17 +465,23 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
 | `name` _string_ |  | default | MinLength: 1 <br /> |
-| `sidecars` _string array_ | List of sidecar containers as yaml of corev1.Container. |  |  |
+| `initContainers` _string array_ | List of init containers as yaml of core/v1 Container. |  |  |
+| `sidecars` _string array_ | List of sidecar containers as yaml of core/v1 Container. |  |  |
 | `privileged` _boolean_ |  | true |  |
 | `jobProxyLoggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `jobResources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ | Resources dedicated for running jobs. |  |  |
@@ -487,12 +513,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  | NodePort |  |
 | `httpNodePort` _integer_ |  |  |  |
@@ -594,12 +625,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -656,6 +692,9 @@ _Appears in:_
 | `locationType` _[LocationType](#locationtype)_ |  |  |  |
 | `path` _string_ |  |  | MinLength: 1 <br /> |
 | `medium` _string_ |  | default |  |
+| `quota` _[Quantity](#quantity)_ | Disk space quota, default is size of related volume. |  |  |
+| `lowWatermark` _[Quantity](#quantity)_ | Limit above which the volume is considered to be non-full. |  |  |
+| `maxTrashMilliseconds` _integer_ | Max TTL of trash in milliseconds. |  | Minimum: 60000 <br /> |
 
 
 #### LocationType
@@ -732,8 +771,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `rotationPeriodMilliseconds` _integer_ |  |  |  |
-| `maxSegmentSize` _integer_ |  |  |  |
-| `maxTotalSizeToKeep` _integer_ |  |  |  |
+| `maxSegmentSize` _[Quantity](#quantity)_ |  |  |  |
+| `maxTotalSizeToKeep` _[Quantity](#quantity)_ |  |  |  |
 | `maxSegmentCountToKeep` _integer_ |  |  |  |
 
 
@@ -794,12 +833,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `cellTagMasterCaches` _integer_ |  |  |  |
 | `hostAddressesMasterCaches` _string array_ |  |  |  |
@@ -849,18 +893,24 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `cellTag` _integer_ |  |  |  |
 | `hostAddresses` _string array_ |  |  |  |
 | `hostAddressLabel` _string_ |  |  |  |
 | `maxSnapshotCountToKeep` _integer_ |  |  |  |
 | `maxChangelogCountToKeep` _integer_ |  |  |  |
+| `sidecars` _string array_ | List of sidecar containers as yaml of core/v1 Container. |  |  |
 
 
 #### OauthServiceSpec
@@ -925,12 +975,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -959,12 +1014,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -993,12 +1053,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  |  |  |
 | `nodePort` _integer_ |  |  |  |
@@ -1085,8 +1150,8 @@ _Appears in:_
 | `keepSocket` _boolean_ |  | true |  |
 | `forceTcp` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace for all components. | false |  |
 | `usePorto` _boolean_ |  | false |  |
-| `hostNetwork` _boolean_ |  | false |  |
 | `extraPodAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `configOverrides` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core) array_ |  |  |  |
@@ -1102,17 +1167,23 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
 | `name` _string_ |  | default | MinLength: 1 <br /> |
-| `sidecars` _string array_ | List of sidecar containers as yaml of corev1.Container. |  |  |
+| `initContainers` _string array_ | List of init containers as yaml of core/v1 Container. |  |  |
+| `sidecars` _string array_ | List of sidecar containers as yaml of core/v1 Container. |  |  |
 | `privileged` _boolean_ |  | true |  |
 | `jobProxyLoggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `jobResources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ | Resources dedicated for running jobs. |  |  |
@@ -1166,12 +1237,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `cellTagMasterCaches` _integer_ |  |  |  |
 | `hostAddressesMasterCaches` _string array_ |  |  |  |
@@ -1205,12 +1281,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -1300,7 +1381,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ |  |  | MinLength: 1 <br /> |
 | `format` _[LogFormat](#logformat)_ |  | plain_text | Enum: [plain_text json yson] <br /> |
-| `minLogLevel` _[LogLevel](#loglevel)_ |  | info | Enum: [trace debug info error] <br /> |
+| `minLogLevel` _[LogLevel](#loglevel)_ |  | info | Enum: [trace debug info warning error] <br /> |
 | `compression` _[LogCompression](#logcompression)_ |  | none | Enum: [none gzip zstd] <br /> |
 | `useTimestampSuffix` _boolean_ |  | false |  |
 | `rotationPolicy` _[LogRotationPolicy](#logrotationpolicy)_ |  |  |  |
@@ -1332,12 +1413,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  |  |  |
 | `minPort` _integer_ |  | 32000 |  |
@@ -1387,12 +1473,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 | `tags` _string array_ | List of the node tags. |  |  |
 | `rack` _string_ | Name of the node rack. |  |  |
@@ -1430,7 +1521,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ |  |  | MinLength: 1 <br /> |
 | `format` _[LogFormat](#logformat)_ |  | plain_text | Enum: [plain_text json yson] <br /> |
-| `minLogLevel` _[LogLevel](#loglevel)_ |  | info | Enum: [trace debug info error] <br /> |
+| `minLogLevel` _[LogLevel](#loglevel)_ |  | info | Enum: [trace debug info warning error] <br /> |
 | `compression` _[LogCompression](#logcompression)_ |  | none | Enum: [none gzip zstd] <br /> |
 | `useTimestampSuffix` _boolean_ |  | false |  |
 | `rotationPolicy` _[LogRotationPolicy](#logrotationpolicy)_ |  |  |  |
@@ -1454,15 +1545,18 @@ _Appears in:_
 | `image` _string_ |  |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ |  | NodePort |  |
 | `httpNodePort` _integer_ |  |  |  |
-| `useInsecureCookies` _boolean_ |  | true |  |
+| `useInsecureCookies` _boolean_ | If defined allows insecure (over http) authentication. | true |  |
+| `secure` _boolean_ | Use secure connection to the cluster's http-proxies. | false |  |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ |  |  |  |
 | `instanceCount` _integer_ |  |  |  |
-| `odinBaseUrl` _string_ |  |  |  |
+| `externalProxy` _string_ | If defined it will be used for direct heavy url/commands like: read_table, write_table, etc. |  |  |
+| `odinBaseUrl` _string_ | Odin is a service for monitoring the availability of YTsaurus clusters. |  |  |
 | `extraEnvVariables` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ |  |  |  |
 | `environment` _string_ |  | testing |  |
 | `theme` _string_ |  | lavander |  |
 | `description` _string_ |  |  |  |
 | `group` _string_ |  |  |  |
+| `directDownload` _boolean_ | When this is set to false, UI will use backend for downloading instead of proxy.<br />If this is set to true or omitted, UI use proxies, which is a default behaviour. |  |  |
 
 
 #### UpdateFlow
@@ -1550,12 +1644,17 @@ _Appears in:_
 | `volumeClaimTemplates` _[EmbeddedPersistentVolumeClaim](#embeddedpersistentvolumeclaim) array_ |  |  |  |
 | `runtimeClassName` _string_ |  |  |  |
 | `enableAntiAffinity` _boolean_ | Deprecated: use Affinity.PodAntiAffinity instead. |  |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace, this overrides global option. |  |  |
 | `monitoringPort` _integer_ |  |  |  |
 | `loggers` _[TextLoggerSpec](#textloggerspec) array_ |  |  |  |
 | `structuredLoggers` _[StructuredLoggerSpec](#structuredloggerspec) array_ |  |  |  |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 | `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `podLabels` _object (keys:string, values:string)_ |  |  |  |
+| `podAnnotations` _object (keys:string, values:string)_ |  |  |  |
+| `setHostnameAsFqdn` _boolean_ | SetHostnameAsFQDN indicates whether to set the hostname as FQDN. | true |  |
+| `terminationGracePeriodSeconds` _integer_ | Optional duration in seconds the pod needs to terminate gracefully. |  |  |
 | `nativeTransport` _[RPCTransportSpec](#rpctransportspec)_ | Component config for native RPC bus transport. |  |  |
 
 
@@ -1567,7 +1666,8 @@ Ytsaurus is the Schema for the ytsaurus API
 
 
 
-
+_Appears in:_
+- [YtsaurusValidator](#ytsaurusvalidator)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1600,8 +1700,8 @@ _Appears in:_
 | `keepSocket` _boolean_ |  | true |  |
 | `forceTcp` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
+| `hostNetwork` _boolean_ | Use the host's network namespace for all components. | false |  |
 | `usePorto` _boolean_ |  | false |  |
-| `hostNetwork` _boolean_ |  | false |  |
 | `extraPodAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `configOverrides` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core) array_ |  |  |  |
@@ -1610,7 +1710,7 @@ _Appears in:_
 | `oauthService` _[OauthServiceSpec](#oauthservicespec)_ |  |  |  |
 | `isManaged` _boolean_ |  | true |  |
 | `enableFullUpdate` _boolean_ |  | true |  |
-| `updateSelector` _[UpdateSelector](#updateselector)_ | UpdateSelector is an experimental field. Behaviour may change.<br />If UpdateSelector is not empty EnableFullUpdate is ignored. |  |  |
+| `updateSelector` _[UpdateSelector](#updateselector)_ | UpdateSelector is an experimental field. Behaviour may change.<br />If UpdateSelector is not empty EnableFullUpdate is ignored. |  | Enum: [ Nothing StatelessOnly MasterOnly TabletNodesOnly ExecNodesOnly Everything] <br /> |
 | `bootstrap` _[BootstrapSpec](#bootstrapspec)_ |  |  |  |
 | `discovery` _[DiscoverySpec](#discoveryspec)_ |  |  |  |
 | `primaryMasters` _[MastersSpec](#mastersspec)_ |  |  |  |
@@ -1631,6 +1731,8 @@ _Appears in:_
 | `yqlAgents` _[YQLAgentSpec](#yqlagentspec)_ |  |  |  |
 | `queueAgents` _[QueueAgentSpec](#queueagentspec)_ |  |  |  |
 | `ui` _[UISpec](#uispec)_ |  |  |  |
+
+
 
 
 

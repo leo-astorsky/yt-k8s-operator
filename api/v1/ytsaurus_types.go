@@ -18,6 +18,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -86,6 +87,16 @@ type LocationSpec struct {
 
 	//+kubebuilder:default:=default
 	Medium string `json:"medium,omitempty"`
+
+	// Disk space quota, default is size of related volume.
+	//+optional
+	Quota *resource.Quantity `json:"quota,omitempty"`
+	// Limit above which the volume is considered to be non-full.
+	//+optional
+	LowWatermark *resource.Quantity `json:"lowWatermark,omitempty"`
+	// Max TTL of trash in milliseconds.
+	//+kubebuilder:validation:Minimum:=60000
+	MaxTrashMilliseconds *int64 `json:"maxTrashMilliseconds,omitempty"`
 }
 
 // LogLevel string describes possible Ytsaurus logging level.
@@ -93,10 +104,11 @@ type LocationSpec struct {
 type LogLevel string
 
 const (
-	LogLevelTrace LogLevel = "trace"
-	LogLevelDebug LogLevel = "debug"
-	LogLevelInfo  LogLevel = "info"
-	LogLevelError LogLevel = "error"
+	LogLevelTrace   LogLevel = "trace"
+	LogLevelDebug   LogLevel = "debug"
+	LogLevelInfo    LogLevel = "info"
+	LogLevelWarning LogLevel = "warning"
+	LogLevelError   LogLevel = "error"
 )
 
 // LogWriterType string describes types of possible log writers.
@@ -141,10 +153,10 @@ type CategoriesFilter struct {
 }
 
 type LogRotationPolicy struct {
-	RotationPeriodMilliseconds *int64 `json:"rotationPeriodMilliseconds,omitempty" yson:"rotation_period,omitempty"`
-	MaxSegmentSize             *int64 `json:"maxSegmentSize,omitempty" yson:"max_segment_size,omitempty"`
-	MaxTotalSizeToKeep         *int64 `json:"maxTotalSizeToKeep,omitempty" yson:"max_total_size_to_keep,omitempty"`
-	MaxSegmentCountToKeep      *int64 `json:"maxSegmentCountToKeep,omitempty" yson:"max_segment_count_to_keep,omitempty"`
+	RotationPeriodMilliseconds *int64             `json:"rotationPeriodMilliseconds,omitempty"`
+	MaxSegmentSize             *resource.Quantity `json:"maxSegmentSize,omitempty"`
+	MaxTotalSizeToKeep         *resource.Quantity `json:"maxTotalSizeToKeep,omitempty"`
+	MaxSegmentCountToKeep      *int64             `json:"maxSegmentCountToKeep,omitempty"`
 }
 
 type BaseLoggerSpec struct {
@@ -153,7 +165,7 @@ type BaseLoggerSpec struct {
 	//+kubebuilder:default:=plain_text
 	//+kubebuilder:validation:Enum=plain_text;json;yson
 	Format LogFormat `json:"format,omitempty"`
-	//+kubebuilder:validation:Enum=trace;debug;info;error
+	//+kubebuilder:validation:Enum=trace;debug;info;warning;error
 	//+kubebuilder:default:=info
 	MinLogLevel LogLevel `json:"minLogLevel,omitempty"`
 	//+kubebuilder:default:=none
@@ -244,6 +256,9 @@ type InstanceSpec struct {
 	RuntimeClassName *string `json:"runtimeClassName,omitempty"`
 	// Deprecated: use Affinity.PodAntiAffinity instead.
 	EnableAntiAffinity *bool `json:"enableAntiAffinity,omitempty"`
+	// Use the host's network namespace, this overrides global option.
+	//+optional
+	HostNetwork *bool `json:"hostNetwork,omitempty"`
 	//+optional
 	MonitoringPort    *int32                 `json:"monitoringPort,omitempty"`
 	Loggers           []TextLoggerSpec       `json:"loggers,omitempty"`
@@ -251,6 +266,14 @@ type InstanceSpec struct {
 	Affinity          *corev1.Affinity       `json:"affinity,omitempty"`
 	NodeSelector      map[string]string      `json:"nodeSelector,omitempty"`
 	Tolerations       []corev1.Toleration    `json:"tolerations,omitempty"`
+	PodLabels         map[string]string      `json:"podLabels,omitempty"`
+	PodAnnotations    map[string]string      `json:"podAnnotations,omitempty"`
+	// SetHostnameAsFQDN indicates whether to set the hostname as FQDN.
+	//+kubebuilder:default:=true
+	SetHostnameAsFQDN *bool `json:"setHostnameAsFqdn,omitempty"`
+	// Optional duration in seconds the pod needs to terminate gracefully.
+	//+optional
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
 	// Component config for native RPC bus transport.
 	//+optional
 	NativeTransport *RPCTransportSpec `json:"nativeTransport,omitempty"`
@@ -269,6 +292,9 @@ type MastersSpec struct {
 
 	MaxSnapshotCountToKeep  *int `json:"maxSnapshotCountToKeep,omitempty"`
 	MaxChangelogCountToKeep *int `json:"maxChangelogCountToKeep,omitempty"`
+
+	// List of sidecar containers as yaml of core/v1 Container.
+	Sidecars []string `json:"sidecars,omitempty"`
 }
 
 type HTTPTransportSpec struct {
@@ -364,6 +390,21 @@ type CRIJobEnvironmentSpec struct {
 	// Base cgroup for jobs.
 	//+optional
 	BaseCgroup *string `json:"baseCgroup,omitempty"`
+	// See: https://github.com/containerd/containerd/blob/main/docs/hosts.md
+	//+optional
+	RegistryConfigPath *string `json:"registryConfigPath,omitempty"`
+	// Initial estimation for space required for pulling image into cache.
+	//+optional
+	ImageSizeEstimation *int64 `json:"imageSizeEstimation,omitempty"`
+	// Multiplier for image size to account space used by unpacked images.
+	//+optional
+	ImageCompressionRatioEstimation *int32 `json:"imageCompressionRatioEstimation,omitempty"`
+	// Always pull "latest" images.
+	//+optional
+	AlwaysPullLatestImage *bool `json:"alwaysPullLatestImage,omitempty"`
+	// Pull images periodically.
+	//+optional
+	ImagePullPeriodSeconds *int32 `json:"imagePullPeriodSeconds,omitempty"`
 }
 
 type JobEnvironmentSpec struct {
@@ -392,7 +433,9 @@ type ExecNodesSpec struct {
 	//+kubebuilder:default:=default
 	//+kubebuilder:validation:MinLength:=1
 	Name string `json:"name,omitempty"`
-	// List of sidecar containers as yaml of corev1.Container.
+	// List of init containers as yaml of core/v1 Container.
+	InitContainers []string `json:"initContainers,omitempty"`
+	// List of sidecar containers as yaml of core/v1 Container.
 	Sidecars []string `json:"sidecars,omitempty"`
 	//+kubebuilder:default:=true
 	//+optional
@@ -435,12 +478,21 @@ type UISpec struct {
 	//+kubebuilder:default:=NodePort
 	ServiceType  corev1.ServiceType `json:"serviceType,omitempty"`
 	HttpNodePort *int32             `json:"httpNodePort,omitempty"`
+	// If defined allows insecure (over http) authentication.
 	//+kubebuilder:default:=true
 	//+optional
-	UseInsecureCookies bool                        `json:"useInsecureCookies"`
-	Resources          corev1.ResourceRequirements `json:"resources,omitempty"`
-	InstanceCount      int32                       `json:"instanceCount,omitempty"`
+	UseInsecureCookies bool `json:"useInsecureCookies"`
+	// Use secure connection to the cluster's http-proxies.
+	//+kubebuilder:default:=false
+	//+optional
+	Secure        bool                        `json:"secure"`
+	Resources     corev1.ResourceRequirements `json:"resources,omitempty"`
+	InstanceCount int32                       `json:"instanceCount,omitempty"`
 
+	// If defined it will be used for direct heavy url/commands like: read_table, write_table, etc.
+	//+optional
+	ExternalProxy *string `json:"externalProxy,omitempty"`
+	// Odin is a service for monitoring the availability of YTsaurus clusters.
 	//+optional
 	OdinBaseUrl *string `json:"odinBaseUrl,omitempty"`
 
@@ -452,6 +504,10 @@ type UISpec struct {
 	Theme       string  `json:"theme,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Group       *string `json:"group,omitempty"`
+	// When this is set to false, UI will use backend for downloading instead of proxy.
+	// If this is set to true or omitted, UI use proxies, which is a default behaviour.
+	//+optional
+	DirectDownload *bool `json:"directDownload,omitempty"`
 }
 
 type QueryTrackerSpec struct {
@@ -525,12 +581,14 @@ type CommonSpec struct {
 	//+kubebuilder:default:=true
 	//+optional
 	UseShortNames bool `json:"useShortNames"`
-	//+kubebuilder:default:=false
-	//+optional
-	UsePorto bool `json:"usePorto"`
+	// Use the host's network namespace for all components.
 	//+kubebuilder:default:=false
 	//+optional
 	HostNetwork bool `json:"hostNetwork"`
+
+	//+kubebuilder:default:=false
+	//+optional
+	UsePorto bool `json:"usePorto"`
 
 	ExtraPodAnnotations map[string]string `json:"extraPodAnnotations,omitempty"`
 
@@ -554,6 +612,7 @@ type YtsaurusSpec struct {
 	//+optional
 	EnableFullUpdate bool `json:"enableFullUpdate"`
 	//+optional
+	//+kubebuilder:validation:Enum={"","Nothing","StatelessOnly","MasterOnly","TabletNodesOnly","ExecNodesOnly","Everything"}
 	// UpdateSelector is an experimental field. Behaviour may change.
 	// If UpdateSelector is not empty EnableFullUpdate is ignored.
 	UpdateSelector UpdateSelector `json:"updateSelector"`
@@ -695,12 +754,12 @@ type YtsaurusStatus struct {
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
-// +kubebuilder:object:root=true
-// +kubebuilder:printcolumn:name="ClusterState",type="string",JSONPath=".status.state",description="State of Ytsaurus cluster"
-// +kubebuilder:printcolumn:name="UpdateState",type="string",JSONPath=".status.updateStatus.state",description="Update state of Ytsaurus cluster"
-// +kubebuilder:printcolumn:name="UpdatingComponents",type="string",JSONPath=".status.updateStatus.components",description="Updating components (for local update)"
-// +kubebuilder:resource:path=ytsaurus,shortName=yt
-// +kubebuilder:subresource:status
+//+kubebuilder:object:root=true
+//+kubebuilder:printcolumn:name="ClusterState",type="string",JSONPath=".status.state",description="State of Ytsaurus cluster"
+//+kubebuilder:printcolumn:name="UpdateState",type="string",JSONPath=".status.updateStatus.state",description="Update state of Ytsaurus cluster"
+//+kubebuilder:printcolumn:name="UpdatingComponents",type="string",JSONPath=".status.updateStatus.components",description="Updating components (for local update)"
+//+kubebuilder:resource:path=ytsaurus,shortName=yt,categories=ytsaurus-all;yt-all
+//+kubebuilder:subresource:status
 
 // Ytsaurus is the Schema for the ytsaurus API
 type Ytsaurus struct {

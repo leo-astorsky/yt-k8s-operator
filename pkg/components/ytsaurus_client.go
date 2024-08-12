@@ -11,14 +11,15 @@ import (
 	"go.ytsaurus.tech/yt/go/yt"
 	"go.ytsaurus.tech/yt/go/yt/ythttp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ptr "k8s.io/utils/pointer"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	"k8s.io/utils/ptr"
+
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type internalYtsaurusClient interface {
@@ -155,7 +156,6 @@ func (yc *YtsaurusClient) handleUpdatingState(ctx context.Context) (ComponentSta
 	case ytv1.UpdateStatePossibilityCheck:
 		if !yc.ytsaurus.IsUpdateStatusConditionTrue(consts.ConditionHasPossibility) &&
 			!yc.ytsaurus.IsUpdateStatusConditionTrue(consts.ConditionNoPossibility) {
-
 			ok, msg, err := yc.HandlePossibilityCheck(ctx)
 			if err != nil {
 				return SimpleStatus(SyncStatusUpdating), err
@@ -301,7 +301,6 @@ func (yc *YtsaurusClient) handleUpdatingState(ctx context.Context) (ComponentSta
 
 	case ytv1.UpdateStateWaitingForTabletCellsRecovery:
 		if !yc.ytsaurus.IsUpdateStatusConditionTrue(consts.ConditionTabletCellsRecovered) {
-
 			err = yc.RecoverTableCells(ctx, yc.ytsaurus.GetResource().Status.UpdateStatus.TabletCellBundles)
 			if err != nil {
 				return SimpleStatus(SyncStatusUpdating), err
@@ -603,8 +602,8 @@ func (yc *YtsaurusClient) StartBuildMasterSnapshots(ctx context.Context, monitor
 	}
 
 	_, err = yc.ytClient.BuildMasterSnapshots(ctx, &yt.BuildMasterSnapshotsOptions{
-		WaitForSnapshotCompletion: ptr.Bool(false),
-		SetReadOnly:               ptr.Bool(true),
+		WaitForSnapshotCompletion: ptr.To(false),
+		SetReadOnly:               ptr.To(true),
 	})
 
 	return err

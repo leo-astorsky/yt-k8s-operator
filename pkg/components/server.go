@@ -6,21 +6,21 @@ import (
 	"path"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
-	ptr "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 const (
-	serverAPIPortName      = "http"
 	readinessProbeHTTPPath = "/orchid/service"
 )
 
@@ -55,6 +55,11 @@ type serverImpl struct {
 	configHelper      *ConfigHelper
 
 	builtStatefulSet *appsv1.StatefulSet
+
+	componentContainerPorts []corev1.ContainerPort
+
+	readinessProbePort     intstr.IntOrString
+	readinessProbeHTTPPath string
 }
 
 func newServer(
@@ -63,6 +68,7 @@ func newServer(
 	instanceSpec *ytv1.InstanceSpec,
 	binaryPath, configFileName, statefulSetName, serviceName string,
 	generator ytconfig.YsonGeneratorFunc,
+	options ...Option,
 ) server {
 	proxy := ytsaurus.APIProxy()
 	commonSpec := ytsaurus.GetCommonSpec()
@@ -73,6 +79,7 @@ func newServer(
 		instanceSpec,
 		binaryPath, configFileName, statefulSetName, serviceName,
 		generator,
+		options...,
 	)
 }
 
@@ -83,6 +90,7 @@ func newServerConfigured(
 	instanceSpec *ytv1.InstanceSpec,
 	binaryPath, configFileName, statefulSetName, serviceName string,
 	generator ytconfig.YsonGeneratorFunc,
+	optFuncs ...Option,
 ) server {
 	image := commonSpec.CoreImage
 	if instanceSpec.Image != nil {
@@ -105,6 +113,22 @@ func newServerConfigured(
 			transportSpec.TLSSecret.Name,
 			consts.BusSecretVolumeName,
 			consts.BusSecretMountPoint)
+	}
+
+	opts := &options{
+		containerPorts: []corev1.ContainerPort{
+			{
+				Name:          consts.YTMonitoringContainerPortName,
+				ContainerPort: *instanceSpec.MonitoringPort,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		readinessProbeEndpointPort: intstr.FromString(consts.YTMonitoringContainerPortName),
+		readinessProbeEndpointPath: readinessProbeHTTPPath,
+	}
+
+	for _, fn := range optFuncs {
+		fn(opts)
 	}
 
 	return &serverImpl{
@@ -143,6 +167,11 @@ func newServerConfigured(
 					Fmt: ytconfig.ConfigFormatYson,
 				},
 			}),
+
+		componentContainerPorts: opts.containerPorts,
+
+		readinessProbePort:     opts.readinessProbeEndpointPort,
+		readinessProbeHTTPPath: opts.readinessProbeEndpointPath,
 	}
 }
 
@@ -240,6 +269,15 @@ func (s *serverImpl) rebuildStatefulSet() *appsv1.StatefulSet {
 	volumeMounts := createVolumeMounts(s.instanceSpec.VolumeMounts)
 
 	statefulSet := s.statefulSet.Build()
+
+	for key, value := range s.instanceSpec.PodLabels {
+		metav1.SetMetaDataLabel(&statefulSet.Spec.Template.ObjectMeta, key, value)
+	}
+
+	for key, value := range s.instanceSpec.PodAnnotations {
+		metav1.SetMetaDataAnnotation(&statefulSet.Spec.Template.ObjectMeta, key, value)
+	}
+
 	statefulSet.Spec.Replicas = &s.instanceSpec.InstanceCount
 	statefulSet.Spec.ServiceName = s.headlessService.Name()
 	statefulSet.Spec.VolumeClaimTemplates = createVolumeClaims(s.instanceSpec.VolumeClaimTemplates)
@@ -264,27 +302,24 @@ func (s *serverImpl) rebuildStatefulSet() *appsv1.StatefulSet {
 	statefulSet.Spec.Template.Spec = corev1.PodSpec{
 		RuntimeClassName:   s.instanceSpec.RuntimeClassName,
 		ImagePullSecrets:   s.commonSpec.ImagePullSecrets,
-		SetHostnameAsFQDN:  ptr.Bool(true),
-		EnableServiceLinks: ptr.Bool(false),
+		SetHostnameAsFQDN:  s.instanceSpec.SetHostnameAsFQDN,
+		EnableServiceLinks: ptr.To(false),
+
+		TerminationGracePeriodSeconds: s.instanceSpec.TerminationGracePeriodSeconds,
+
 		Containers: []corev1.Container{
 			{
 				Image:        s.image,
 				Name:         consts.YTServerContainerName,
 				Command:      command,
 				VolumeMounts: volumeMounts,
-				Ports: []corev1.ContainerPort{
-					{
-						Name:          serverAPIPortName,
-						ContainerPort: *s.instanceSpec.MonitoringPort,
-						Protocol:      corev1.ProtocolTCP,
-					},
-				},
-				Resources: s.instanceSpec.Resources,
+				Ports:        s.componentContainerPorts,
+				Resources:    *s.instanceSpec.Resources.DeepCopy(),
 				ReadinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Port: intstr.FromString(serverAPIPortName),
-							Path: readinessProbeHTTPPath,
+							Port: s.readinessProbePort,
+							Path: s.readinessProbeHTTPPath,
 						},
 					},
 					InitialDelaySeconds: readinessProbeParams.InitialDelaySeconds,
@@ -315,7 +350,7 @@ func (s *serverImpl) rebuildStatefulSet() *appsv1.StatefulSet {
 		NodeSelector: s.instanceSpec.NodeSelector,
 		Tolerations:  s.instanceSpec.Tolerations,
 	}
-	if s.commonSpec.HostNetwork {
+	if ptr.Deref(s.instanceSpec.HostNetwork, s.commonSpec.HostNetwork) {
 		statefulSet.Spec.Template.Spec.HostNetwork = true
 		statefulSet.Spec.Template.Spec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
 	}
@@ -341,6 +376,6 @@ func (s *serverImpl) rebuildStatefulSet() *appsv1.StatefulSet {
 
 func (s *serverImpl) removePods(ctx context.Context) error {
 	ss := s.rebuildStatefulSet()
-	ss.Spec.Replicas = ptr.Int32(0)
+	ss.Spec.Replicas = ptr.To(int32(0))
 	return s.Sync(ctx)
 }

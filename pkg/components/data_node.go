@@ -3,14 +3,15 @@ package components
 import (
 	"context"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type DataNode struct {
@@ -34,7 +35,7 @@ func NewDataNode(
 	}
 
 	if spec.InstanceSpec.MonitoringPort == nil {
-		spec.InstanceSpec.MonitoringPort = ptr.Int32(consts.DataNodeMonitoringPort)
+		spec.InstanceSpec.MonitoringPort = ptr.To(int32(consts.DataNodeMonitoringPort))
 	}
 
 	srv := newServer(
@@ -48,6 +49,11 @@ func NewDataNode(
 		func() ([]byte, error) {
 			return cfgen.GetDataNodeConfig(spec)
 		},
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.DataNodeRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	return &DataNode{

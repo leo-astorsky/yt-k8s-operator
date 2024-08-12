@@ -2,19 +2,22 @@ package controllers_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"sort"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	"go.ytsaurus.tech/yt/go/mapreduce"
 	"go.ytsaurus.tech/yt/go/mapreduce/spec"
 	"go.ytsaurus.tech/yt/go/yt/ytrpc"
 	"go.ytsaurus.tech/yt/go/yterrors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,10 +28,11 @@ import (
 	"go.ytsaurus.tech/yt/go/yt"
 	"go.ytsaurus.tech/yt/go/yt/ythttp"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/components"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/components"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/testutil"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 const (
@@ -122,7 +126,6 @@ func getMasterPod(name, namespace string) corev1.Pod {
 }
 
 func deleteYtsaurus(ctx context.Context, ytsaurus *ytv1.Ytsaurus) {
-
 	if err := k8sClient.Delete(ctx, ytsaurus); err != nil {
 		log.Error(err, "Deleting ytsaurus failed")
 	}
@@ -227,7 +230,7 @@ func runImpossibleUpdateAndRollback(ytsaurus *ytv1.Ytsaurus, ytClient yt.Client)
 
 	By("Run cluster impossible update")
 	Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
-	ytsaurus.Spec.CoreImage = ytv1.CoreImageSecond
+	ytsaurus.Spec.CoreImage = testutil.CoreImageSecond
 	Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
 
 	EventuallyYtsaurus(ctx, name, reactionTimeout).Should(HaveClusterUpdateState(ytv1.UpdateStateImpossibleToStart))
@@ -235,7 +238,7 @@ func runImpossibleUpdateAndRollback(ytsaurus *ytv1.Ytsaurus, ytClient yt.Client)
 	By("Set previous core image")
 	Eventually(func(g Gomega) {
 		g.Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
-		ytsaurus.Spec.CoreImage = ytv1.CoreImageFirst
+		ytsaurus.Spec.CoreImage = testutil.CoreImageFirst
 		g.Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
 	}, reactionTimeout, pollInterval).Should(Succeed())
 
@@ -247,6 +250,17 @@ func runImpossibleUpdateAndRollback(ytsaurus *ytv1.Ytsaurus, ytClient yt.Client)
 	Expect(ytClient.ListNode(ctx, ypath.Path("/"), &res, nil)).Should(Succeed())
 }
 
+func createConfigOverridesMap(namespace, name, key, value string) {
+	resource := corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Data: map[string]string{key: value},
+	}
+	Expect(k8sClient.Create(ctx, &resource)).Should(Succeed())
+}
+
 type testRow struct {
 	A string `yson:"a"`
 }
@@ -254,21 +268,164 @@ type testRow struct {
 var _ = Describe("Basic test for Ytsaurus controller", func() {
 	Context("When setting up the test environment", func() {
 		It(
-			"Should run and update Ytsaurus within same major version",
-			Label("update"),
-			getSimpleUpdateScenario("test-minor-update", ytv1.CoreImageSecond),
+			"Should run and update Ytsaurus within same major version", Label("basic"), getSimpleUpdateScenario("test-minor-update", testutil.CoreImageSecond),
 		)
 		It(
 			"Should run and update Ytsaurus to the next major version",
-			Label("update"),
-			getSimpleUpdateScenario("test-major-update", ytv1.CoreImageNextVer),
+			getSimpleUpdateScenario("test-major-update", testutil.CoreImageNextVer),
 		)
+		It(
+			"Should be updated according to UpdateSelector=Everything", func(ctx context.Context) {
+				namespace := "testslcteverything"
 
+				By("Creating a Ytsaurus resource")
+				ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
+				DeferCleanup(deleteYtsaurus, ytsaurus)
+				name := types.NamespacedName{Name: ytsaurus.GetName(), Namespace: namespace}
+				deployAndCheck(ytsaurus, namespace)
+				podsBeforeUpdate := getComponentPods(ctx, namespace)
+
+				By("Run cluster update with selector: nothing")
+				Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
+				ytsaurus.Spec.UpdateSelector = ytv1.UpdateSelectorNothing
+				// We want change in all yson configs, new discovery instance will trigger that.
+				ytsaurus.Spec.Discovery.InstanceCount += 1
+				Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
+
+				By("Ensure cluster doesn't start updating for 5 seconds")
+				ConsistentlyYtsaurus(ctx, name, 5*time.Second).Should(HaveClusterState(ytv1.ClusterStateRunning))
+				podsAfterBlockedUpdate := getComponentPods(ctx, namespace)
+				Expect(podsBeforeUpdate).To(
+					Equal(podsAfterBlockedUpdate),
+					"pods shouldn't be recreated when update is blocked",
+				)
+
+				By("Update cluster update with strategy full")
+				Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
+				ytsaurus.Spec.UpdateSelector = ytv1.UpdateSelectorEverything
+				ytsaurus.Spec.Discovery.InstanceCount += 1
+				Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
+				EventuallyYtsaurus(ctx, name, reactionTimeout).Should(HaveClusterUpdatingComponents())
+
+				By("Wait cluster update with full update complete")
+				EventuallyYtsaurus(ctx, name, upgradeTimeout).Should(HaveClusterState(ytv1.ClusterStateRunning))
+				podsAfterFullUpdate := getComponentPods(ctx, namespace)
+
+				podDiff := diffPodsCreation(podsBeforeUpdate, podsAfterFullUpdate)
+				Expect(podDiff.created.Equal(NewStringSetFromItems("ds-1", "ds-2"))).To(BeTrue(), "unexpected pod diff created %v", podDiff.created)
+				Expect(podDiff.deleted.IsEmpty()).To(BeTrue(), "unexpected pod diff deleted %v", podDiff.deleted)
+				Expect(podDiff.recreated.Equal(NewStringSetFromMap(podsBeforeUpdate))).To(BeTrue(), "unexpected pod diff recreated %v", podDiff.recreated)
+			},
+		)
+		It(
+			"Should be updated according to UpdateSelector=TabletNodesOnly,ExecNodesOnly", func(ctx context.Context) {
+				namespace := "testslctnodes"
+
+				By("Creating a Ytsaurus resource")
+				ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
+				DeferCleanup(deleteYtsaurus, ytsaurus)
+				name := types.NamespacedName{Name: ytsaurus.GetName(), Namespace: namespace}
+
+				deployAndCheck(ytsaurus, namespace)
+				podsBeforeUpdate := getComponentPods(ctx, namespace)
+
+				By("Run cluster update with selector:ExecNodesOnly")
+				Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
+				ytsaurus.Spec.UpdateSelector = ytv1.UpdateSelectorExecNodesOnly
+				ytsaurus.Spec.Discovery.InstanceCount += 1
+				Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
+				EventuallyYtsaurus(ctx, name, reactionTimeout).Should(HaveClusterUpdatingComponents("ExecNode"))
+
+				By("Wait cluster update with selector:ExecNodesOnly complete")
+				EventuallyYtsaurus(ctx, name, upgradeTimeout).Should(HaveClusterState(ytv1.ClusterStateRunning))
+				ytClient := createYtsaurusClient(ytsaurus, namespace)
+				checkClusterBaseViability(ytClient)
+
+				podsAfterEndUpdate := getComponentPods(ctx, namespace)
+				podDiff := diffPodsCreation(podsBeforeUpdate, podsAfterEndUpdate)
+				Expect(podDiff.created.IsEmpty()).To(BeTrue(), "unexpected pod diff created %v", podDiff.created)
+				Expect(podDiff.deleted.IsEmpty()).To(BeTrue(), "unexpected pod diff deleted %v", podDiff.deleted)
+				Expect(podDiff.recreated.Equal(NewStringSetFromItems("end-0"))).To(
+					BeTrue(), "unexpected pod diff recreated %v", podDiff.recreated)
+
+				By("Run cluster update with selector:TabletNodesOnly")
+				Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
+				ytsaurus.Spec.UpdateSelector = ytv1.UpdateSelectorTabletNodesOnly
+				ytsaurus.Spec.Discovery.InstanceCount += 1
+				Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
+				EventuallyYtsaurus(ctx, name, reactionTimeout).Should(HaveClusterUpdatingComponents("TabletNode"))
+
+				By("Wait cluster update with selector:TabletNodesOnly complete")
+				EventuallyYtsaurus(ctx, name, upgradeTimeout).Should(HaveClusterState(ytv1.ClusterStateRunning))
+				checkClusterBaseViability(ytClient)
+
+				podsAfterTndUpdate := getComponentPods(ctx, namespace)
+				podDiff = diffPodsCreation(podsAfterEndUpdate, podsAfterTndUpdate)
+				Expect(podDiff.created.IsEmpty()).To(BeTrue(), "unexpected pod diff created %v", podDiff.created)
+				Expect(podDiff.deleted.IsEmpty()).To(BeTrue(), "unexpected pod diff deleted %v", podDiff.deleted)
+				Expect(podDiff.recreated.Equal(NewStringSetFromItems("tnd-0", "tnd-1", "tnd-2"))).To(
+					BeTrue(), "unexpected pod diff recreated %v", podDiff.recreated)
+			},
+		)
+		It(
+			"Should be updated according to UpdateSelector=MasterOnly,StatelessOnly", Label("basic"), func(ctx context.Context) {
+				namespace := "testslctother"
+
+				By("Creating a Ytsaurus resource")
+				ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
+				DeferCleanup(deleteYtsaurus, ytsaurus)
+				name := types.NamespacedName{Name: ytsaurus.GetName(), Namespace: namespace}
+
+				deployAndCheck(ytsaurus, namespace)
+				podsBeforeUpdate := getComponentPods(ctx, namespace)
+
+				By("Run cluster update with selector:MasterOnly")
+				Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
+				ytsaurus.Spec.UpdateSelector = ytv1.UpdateSelectorMasterOnly
+				ytsaurus.Spec.Discovery.InstanceCount += 1
+				Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
+				EventuallyYtsaurus(ctx, name, reactionTimeout).Should(HaveClusterUpdatingComponents("Master"))
+
+				By("Wait cluster update with selector:MasterOnly complete")
+				EventuallyYtsaurus(ctx, name, upgradeTimeout).Should(HaveClusterState(ytv1.ClusterStateRunning))
+				ytClient := createYtsaurusClient(ytsaurus, namespace)
+				checkClusterBaseViability(ytClient)
+				podsAfterMasterUpdate := getComponentPods(ctx, namespace)
+				podDiff := diffPodsCreation(podsBeforeUpdate, podsAfterMasterUpdate)
+				Expect(podDiff.created.IsEmpty()).To(BeTrue(), "unexpected pod diff created %v", podDiff.created)
+				Expect(podDiff.deleted.IsEmpty()).To(BeTrue(), "unexpected pod diff deleted %v", podDiff.deleted)
+				Expect(podDiff.recreated.Equal(NewStringSetFromItems("ms-0"))).To(
+					BeTrue(), "unexpected pod diff recreated %v", podDiff.recreated)
+
+				By("Run cluster update with selector:StatelessOnly")
+				Expect(k8sClient.Get(ctx, name, ytsaurus)).Should(Succeed())
+				ytsaurus.Spec.UpdateSelector = ytv1.UpdateSelectorStatelessOnly
+				ytsaurus.Spec.Discovery.InstanceCount += 1
+				Expect(k8sClient.Update(ctx, ytsaurus)).Should(Succeed())
+				EventuallyYtsaurus(ctx, name, reactionTimeout).Should(
+					HaveClusterUpdatingComponents("Discovery", "DataNode", "HttpProxy", "ExecNode", "Scheduler", "ControllerAgent"),
+				)
+				By("Wait cluster update with selector:StatelessOnly complete")
+				EventuallyYtsaurus(ctx, name, upgradeTimeout).Should(HaveClusterState(ytv1.ClusterStateRunning))
+				checkClusterBaseViability(ytClient)
+				podsAfterStatelessUpdate := getComponentPods(ctx, namespace)
+				podDiff = diffPodsCreation(podsAfterMasterUpdate, podsAfterStatelessUpdate)
+				// Only with StatelessOnly strategy those pending ds pods should be finally created.
+				Expect(podDiff.created.Equal(NewStringSetFromItems("ds-1", "ds-2"))).To(
+					BeTrue(), "unexpected pod diff created %v", podDiff.created)
+				Expect(podDiff.deleted.IsEmpty()).To(BeTrue(), "unexpected pod diff deleted %v", podDiff.deleted)
+				statelessUpdatedPods := NewStringSetFromMap(podsAfterStatelessUpdate).Difference(
+					NewStringSetFromItems("ms-0", "tnd-0", "tnd-1", "tnd-2", "ds-1", "ds-2"))
+				Expect(podDiff.recreated.Equal(
+					statelessUpdatedPods),
+				).To(BeTrue(), "unexpected pod diff recreated %v", podDiff.recreated)
+			},
+		)
 		// This is a test for specific regression bug when master pods are recreated during PossibilityCheck stage.
 		It("Master shouldn't be recreated before WaitingForPodsCreation state if config changes", func(ctx context.Context) {
 			namespace := "test3"
-			ytsaurus := ytv1.CreateMinimalYtsaurusResource(namespace)
-			ytsaurusKey := types.NamespacedName{Name: ytv1.YtsaurusName, Namespace: namespace}
+			ytsaurus := testutil.CreateMinimalYtsaurusResource(namespace)
+			ytsaurusKey := types.NamespacedName{Name: testutil.YtsaurusName, Namespace: namespace}
 
 			By("Creating a Ytsaurus resource")
 			g := ytconfig.NewGenerator(ytsaurus, "local")
@@ -324,8 +481,8 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 
 			namespace := "test4"
 
-			ytsaurus := ytv1.CreateMinimalYtsaurusResource(namespace)
-			ytsaurus = ytv1.WithTabletNodes(ytsaurus)
+			ytsaurus := testutil.CreateMinimalYtsaurusResource(namespace)
+			ytsaurus = testutil.WithTabletNodes(ytsaurus)
 
 			g := ytconfig.NewGenerator(ytsaurus, "local")
 
@@ -373,8 +530,8 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 
 			namespace := "test5"
 
-			ytsaurus := ytv1.CreateMinimalYtsaurusResource(namespace)
-			ytsaurus = ytv1.WithDataNodes(ytsaurus)
+			ytsaurus := testutil.CreateMinimalYtsaurusResource(namespace)
+			ytsaurus = testutil.WithDataNodes(ytsaurus)
 			ytsaurus.Spec.TabletNodes = make([]ytv1.TabletNodesSpec, 0)
 
 			g := ytconfig.NewGenerator(ytsaurus, "local")
@@ -419,13 +576,33 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 			runImpossibleUpdateAndRollback(ytsaurus, ytClient)
 		})
 
-		It("Should run with query tracker and check that access control objects set up correctly", func(ctx context.Context) {
+		It("Should run with query tracker and check that query tracker rpc address set up correctly", Label("basic"), func(ctx context.Context) {
+			By("Creating a Ytsaurus resource")
+
+			namespace := "querytrackeraddress"
+
+			ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
+			ytsaurus = testutil.WithQueryTracker(ytsaurus)
+
+			g := ytconfig.NewGenerator(ytsaurus, "local")
+
+			DeferCleanup(deleteYtsaurus, ytsaurus)
+			runYtsaurus(ytsaurus)
+
+			By("Creating ytsaurus client")
+			ytClient := getYtClient(g, namespace)
+
+			By("Check that query tracker channel exists in cluster_connection")
+			Expect(ytClient.NodeExists(ctx, ypath.Path("//sys/@cluster_connection/query_tracker/stages/production/channel"), nil)).Should(BeTrue())
+		})
+
+		It("Should run with query tracker and check that access control objects set up correctly", Label("basic"), func(ctx context.Context) {
 			By("Creating a Ytsaurus resource")
 
 			namespace := "querytrackeraco"
 
-			ytsaurus := ytv1.CreateBaseYtsaurusResource(namespace)
-			ytsaurus = ytv1.WithQueryTracker(ytsaurus)
+			ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
+			ytsaurus = testutil.WithQueryTracker(ytsaurus)
 
 			g := ytconfig.NewGenerator(ytsaurus, "local")
 
@@ -446,6 +623,9 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 
 			By("Check that access control object 'everyone-use' in namespace 'queries' exists")
 			Expect(ytClient.NodeExists(ctx, ypath.Path("//sys/access_control_object_namespaces/queries/everyone-use"), nil)).Should(BeTrue())
+
+			By("Check that access control object 'everyone-share' in namespace 'queries' exists")
+			Expect(ytClient.NodeExists(ctx, ypath.Path("//sys/access_control_object_namespaces/queries/everyone-share"), nil)).Should(BeTrue())
 
 			By("Check that access control object namespace 'queries' allows users to create children and owners to do everything")
 			queriesAcl := []map[string]interface{}{}
@@ -476,6 +656,17 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 				),
 			))
 
+			By("Check that access control object 'everyone-share' in namespace 'queries' allows everyone to read and use")
+			everyoneSharePrincipalAcl := []map[string]interface{}{}
+			Expect(ytClient.GetNode(ctx, ypath.Path("//sys/access_control_object_namespaces/queries/everyone-share/@principal_acl"), &everyoneSharePrincipalAcl, nil)).Should(Succeed())
+			Expect(everyoneSharePrincipalAcl).Should(ConsistOf(
+				SatisfyAll(
+					HaveKeyWithValue("action", "allow"),
+					HaveKeyWithValue("subjects", ConsistOf("everyone")),
+					HaveKeyWithValue("permissions", ConsistOf("read", "use")),
+				),
+			))
+
 			By("Check that access control object 'everyone-use' in namespace 'queries' allows everyone to use")
 			everyoneUsePrincipalAcl := []map[string]interface{}{}
 			Expect(ytClient.GetNode(ctx, ypath.Path("//sys/access_control_object_namespaces/queries/everyone-use/@principal_acl"), &everyoneUsePrincipalAcl, nil)).Should(Succeed())
@@ -494,14 +685,14 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 
 			namespace := "remoteexec"
 
-			ytsaurus := ytv1.CreateBaseYtsaurusResource(namespace)
+			ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
 			// Ensure that no local exec nodes exist, only remote ones (which will be created later).
 			ytsaurus.Spec.ExecNodes = []ytv1.ExecNodesSpec{}
 			g := ytconfig.NewGenerator(ytsaurus, "local")
 
 			remoteYtsaurus := &ytv1.RemoteYtsaurus{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      ytv1.RemoteResourceName,
+					Name:      testutil.RemoteResourceName,
 					Namespace: namespace,
 				},
 				Spec: ytv1.RemoteYtsaurusSpec{
@@ -515,16 +706,16 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 			}
 
 			remoteNodes := &ytv1.RemoteExecNodes{
-				ObjectMeta: metav1.ObjectMeta{Name: ytv1.RemoteResourceName, Namespace: namespace},
+				ObjectMeta: metav1.ObjectMeta{Name: testutil.RemoteResourceName, Namespace: namespace},
 				Spec: ytv1.RemoteExecNodesSpec{
 					RemoteClusterSpec: &corev1.LocalObjectReference{
-						Name: ytv1.RemoteResourceName,
+						Name: testutil.RemoteResourceName,
 					},
 					CommonSpec: ytv1.CommonSpec{
-						CoreImage: ytv1.CoreImageFirst,
+						CoreImage: testutil.CoreImageFirst,
 					},
 					ExecNodesSpec: ytv1.ExecNodesSpec{
-						InstanceSpec: ytv1.CreateExecNodeInstanceSpec(),
+						InstanceSpec: testutil.CreateExecNodeInstanceSpec(),
 					},
 				},
 			}
@@ -560,7 +751,7 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 			Expect(statuses).Should(Not(BeEmpty()))
 			for _, status := range statuses {
 				Expect(status.Address).Should(
-					ContainSubstring("end-"+ytv1.RemoteResourceName),
+					ContainSubstring("end-"+testutil.RemoteResourceName),
 					"actual status: %s", status,
 				)
 			}
@@ -570,8 +761,8 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 			"Rpc proxies should require authentication",
 			func(ctx context.Context) {
 				namespace := "testrpc"
-				ytsaurus := ytv1.CreateMinimalYtsaurusResource(namespace)
-				ytsaurus = ytv1.WithRPCProxies(ytsaurus)
+				ytsaurus := testutil.CreateMinimalYtsaurusResource(namespace)
+				ytsaurus = testutil.WithRPCProxies(ytsaurus)
 				DeferCleanup(deleteYtsaurus, ytsaurus)
 				deployAndCheck(ytsaurus, namespace)
 
@@ -589,6 +780,116 @@ var _ = Describe("Basic test for Ytsaurus controller", func() {
 				Expect(yterrors.ContainsErrorCode(err, yterrors.CodeRPCAuthenticationError)).Should(BeTrue())
 			},
 		)
+
+		It(
+			"ConfigOverrides update shout trigger reconciliation",
+			func(ctx context.Context) {
+				namespace := "test-overrides"
+				coName := "config-overrides"
+				ytsaurus := testutil.CreateMinimalYtsaurusResource(namespace)
+				ytsaurus.Spec.ConfigOverrides = &corev1.LocalObjectReference{Name: coName}
+				DeferCleanup(deleteYtsaurus, ytsaurus)
+
+				deployAndCheck(ytsaurus, namespace)
+				log.Info("sleep a little, because after cluster is running some reconciliations still may happen " +
+					"for some time (and for some reason) and we don't want to interfere before map creation")
+				time.Sleep(3 * time.Second)
+
+				dsPodName := "ds-0"
+				msPodName := "ms-0"
+
+				getPodByName := func(name string) (*corev1.Pod, error) {
+					ds0Name := types.NamespacedName{Name: name, Namespace: namespace}
+					dsPod := &corev1.Pod{}
+					err := k8sClient.Get(ctx, ds0Name, dsPod)
+					return dsPod, err
+				}
+				dsPod, err := getPodByName(dsPodName)
+				Expect(err).Should(Succeed())
+				msPod, err := getPodByName(msPodName)
+				Expect(err).Should(Succeed())
+				dsPodCreatedBefore := dsPod.CreationTimestamp.Time
+				log.Info("ds created before", "ts", dsPodCreatedBefore)
+				msPodCreatedBefore := msPod.CreationTimestamp.Time
+
+				discoveryOverride := "{resource_limits = {total_memory = 123456789;};}"
+				createConfigOverridesMap(namespace, coName, "ytserver-discovery.yson", discoveryOverride)
+
+				Eventually(ctx, func() bool {
+					pod, err := getPodByName(dsPodName)
+					if apierrors.IsNotFound(err) {
+						return false
+					}
+					dsPodCreatedAfter := pod.CreationTimestamp
+					log.Info("ds created after", "ts", dsPodCreatedAfter)
+					return dsPodCreatedAfter.After(dsPodCreatedBefore)
+				}).WithTimeout(30 * time.Second).
+					WithPolling(300 * time.Millisecond).
+					Should(BeTrueBecause("ds pod should be recreated on configOverrides creation"))
+
+				msPod, err = getPodByName(msPodName)
+				Expect(err).Should(Succeed())
+				Expect(msPod.CreationTimestamp.Time).Should(
+					Equal(msPodCreatedBefore), "ms pods shouldn't be recreated",
+				)
+			},
+		)
+
+		It("Sensors should be annotated with host", func(ctx context.Context) {
+			namespace := "testsolomon"
+			ytsaurus := testutil.CreateMinimalYtsaurusResource(namespace)
+			ytsaurus.Spec.HostNetwork = true
+			DeferCleanup(deleteYtsaurus, ytsaurus)
+			deployAndCheck(ytsaurus, namespace)
+
+			By("Creating ytsaurus client")
+			g := ytconfig.NewGenerator(ytsaurus, "local")
+			ytClient := getYtClient(g, namespace)
+
+			primaryMasters := make([]string, 0)
+			Expect(ytClient.ListNode(ctx, ypath.Path("//sys/primary_masters"), &primaryMasters, nil)).Should(Succeed())
+			Expect(primaryMasters).Should(Not(BeEmpty()))
+
+			masterAddress := primaryMasters[0]
+
+			monitoringPort := 0
+			Expect(ytClient.GetNode(ctx, ypath.Path(fmt.Sprintf("//sys/primary_masters/%v/orchid/config/monitoring_port", masterAddress)), &monitoringPort, nil)).Should(Succeed())
+
+			msPod := getMasterPod(g.GetMasterPodNames()[0], namespace)
+			fmt.Fprintf(GinkgoWriter, "podIP: %v\n", msPod.Status.PodIP)
+
+			rsp, err := http.Get(fmt.Sprintf(
+				"http://%v:%v/solomon/all",
+				msPod.Status.PodIP,
+				monitoringPort))
+			Expect(err).Should(Succeed())
+			Expect(rsp.StatusCode).Should(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(rsp.Body)
+			Expect(err).Should(Succeed())
+
+			Expect(json.Valid(body)).Should(BeTrue())
+
+			var parsedBody map[string]any
+			Expect(json.Unmarshal(body, &parsedBody)).Should(Succeed())
+
+			sensors, ok := parsedBody["sensors"].([]any)
+			Expect(ok).Should(BeTrue())
+			Expect(sensors).ShouldNot(BeEmpty())
+
+			sensor, ok := sensors[0].(map[string]any)
+			Expect(ok).Should(BeTrue())
+			Expect("labels").Should(BeKeyOf(sensor))
+
+			labels, ok := sensor["labels"].(map[string]any)
+			Expect(ok).Should(BeTrue())
+			Expect("host").Should(BeKeyOf(labels))
+			Expect("pod").Should(BeKeyOf(labels))
+			// We don not check the actual value, since it is something weird in our testing setup.
+			Expect(labels["host"]).ShouldNot(BeEmpty())
+			Expect(labels["pod"]).Should(Equal("ms-0"))
+			fmt.Fprintf(GinkgoWriter, "host=%v, pod=%v\n", labels["host"], labels["pod"])
+		})
 	})
 
 })
@@ -600,7 +901,6 @@ func checkClusterBaseViability(ytClient yt.Client) {
 	Expect(ytClient.ListNode(ctx, ypath.Path("/"), &res, nil)).Should(Succeed())
 
 	By("Check that tablet cell bundles are in `good` health")
-
 	Eventually(func() bool {
 		notGoodBundles, err := components.GetNotGoodTabletCellBundles(ctx, ytClient)
 		if err != nil {
@@ -624,18 +924,22 @@ func checkClusterViability(ytClient yt.Client) {
 }
 
 func deployAndCheck(ytsaurus *ytv1.Ytsaurus, namespace string) {
-	g := ytconfig.NewGenerator(ytsaurus, "local")
 	runYtsaurus(ytsaurus)
 
-	By("Creating ytsaurus client")
-	ytClient := getYtClient(g, namespace)
+	ytClient := createYtsaurusClient(ytsaurus, namespace)
 	checkClusterViability(ytClient)
+}
+
+func createYtsaurusClient(ytsaurus *ytv1.Ytsaurus, namespace string) yt.Client {
+	By("Creating ytsaurus client")
+	g := ytconfig.NewGenerator(ytsaurus, "local")
+	return getYtClient(g, namespace)
 }
 
 func getSimpleUpdateScenario(namespace, newImage string) func(ctx context.Context) {
 	return func(ctx context.Context) {
 		By("Creating a Ytsaurus resource")
-		ytsaurus := ytv1.CreateBaseYtsaurusResource(namespace)
+		ytsaurus := testutil.CreateBaseYtsaurusResource(namespace)
 		DeferCleanup(deleteYtsaurus, ytsaurus)
 		name := types.NamespacedName{Name: ytsaurus.GetName(), Namespace: namespace}
 		deployAndCheck(ytsaurus, namespace)

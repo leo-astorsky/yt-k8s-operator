@@ -2,10 +2,11 @@ package ytconfig
 
 import (
 	"fmt"
-	"go.ytsaurus.tech/library/go/ptr"
 	"path"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	"k8s.io/utils/ptr"
+
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 )
 
 func defaultStderrLoggerSpec() ytv1.TextLoggerSpec {
@@ -62,6 +63,13 @@ type LoggingRule struct {
 	Family            *LogFamily    `yson:"family,omitempty"`
 }
 
+type LogRotationPolicy struct {
+	RotationPeriodMilliseconds *int64 `yson:"rotation_period,omitempty"`
+	MaxSegmentSize             *int64 `yson:"max_segment_size,omitempty"`
+	MaxTotalSizeToKeep         *int64 `yson:"max_total_size_to_keep,omitempty"`
+	MaxSegmentCountToKeep      *int64 `yson:"max_segment_count_to_keep,omitempty"`
+}
+
 type LoggingWriter struct {
 	WriterType ytv1.LogWriterType `yson:"type,omitempty"`
 	FileName   string             `yson:"file_name,omitempty"`
@@ -72,7 +80,7 @@ type LoggingWriter struct {
 	UseTimestampSuffix   bool   `yson:"use_timestamp_suffix,omitempty"`
 	EnableSystemMessages bool   `yson:"enable_system_messages,omitempty"`
 
-	RotationPolicy *ytv1.LogRotationPolicy `yson:"rotation_policy,omitempty"`
+	RotationPolicy *LogRotationPolicy `yson:"rotation_policy,omitempty"`
 }
 
 type Logging struct {
@@ -125,7 +133,7 @@ func createBaseLoggingRule(spec ytv1.BaseLoggerSpec) LoggingRule {
 func createLoggingRule(spec ytv1.TextLoggerSpec) LoggingRule {
 	loggingRule := createBaseLoggingRule(spec.BaseLoggerSpec)
 
-	loggingRule.Family = ptr.T(LogFamilyPlainText)
+	loggingRule.Family = ptr.To(LogFamilyPlainText)
 
 	if spec.CategoriesFilter != nil {
 		switch spec.CategoriesFilter.Type {
@@ -141,7 +149,7 @@ func createLoggingRule(spec ytv1.TextLoggerSpec) LoggingRule {
 
 func createStructuredLoggingRule(spec ytv1.StructuredLoggerSpec) LoggingRule {
 	loggingRule := createBaseLoggingRule(spec.BaseLoggerSpec)
-	loggingRule.Family = ptr.T(LogFamilyStructured)
+	loggingRule.Family = ptr.To(LogFamilyStructured)
 	loggingRule.IncludeCategories = []string{spec.Category}
 
 	return loggingRule
@@ -170,7 +178,19 @@ func createBaseLoggingWriter(componentName string, loggingDirectory string, writ
 	}
 
 	loggingWriter.UseTimestampSuffix = loggerSpec.UseTimestampSuffix
-	loggingWriter.RotationPolicy = loggerSpec.RotationPolicy
+
+	if loggerSpec.RotationPolicy != nil {
+		loggingWriter.RotationPolicy = &LogRotationPolicy{
+			RotationPeriodMilliseconds: loggerSpec.RotationPolicy.RotationPeriodMilliseconds,
+			MaxSegmentCountToKeep:      loggerSpec.RotationPolicy.MaxSegmentCountToKeep,
+		}
+		if loggerSpec.RotationPolicy.MaxSegmentSize != nil {
+			loggingWriter.RotationPolicy.MaxSegmentSize = ptr.To(loggerSpec.RotationPolicy.MaxSegmentSize.Value())
+		}
+		if loggerSpec.RotationPolicy.MaxTotalSizeToKeep != nil {
+			loggingWriter.RotationPolicy.MaxTotalSizeToKeep = ptr.To(loggerSpec.RotationPolicy.MaxTotalSizeToKeep.Value())
+		}
+	}
 	return loggingWriter
 }
 

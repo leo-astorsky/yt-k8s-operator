@@ -8,6 +8,9 @@ metadata:
 spec:
   group: cluster.ytsaurus.tech
   names:
+    categories:
+    - ytsaurus-all
+    - yt-all
     kind: RemoteYtsaurus
     listKind: RemoteYtsaurusList
     plural: remoteytsaurus
@@ -229,11 +232,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -268,11 +273,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -339,11 +346,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -378,11 +387,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -447,11 +458,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -486,11 +499,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
@@ -557,11 +572,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -596,11 +613,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
@@ -647,6 +666,10 @@ spec:
                 items:
                   type: string
                 type: array
+              hostNetwork:
+                description: Use the host's network namespace, this overrides global
+                  option.
+                type: boolean
               image:
                 description: Overrides coreImage for component.
                 type: string
@@ -660,12 +683,32 @@ spec:
                       description: LocationType string describes types of disk locations
                         for YT components.
                       type: string
+                    lowWatermark:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Limit above which the volume is considered to be
+                        non-full.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    maxTrashMilliseconds:
+                      description: Max TTL of trash in milliseconds.
+                      format: int64
+                      minimum: 60000
+                      type: integer
                     medium:
                       default: default
                       type: string
                     path:
                       minLength: 1
                       type: string
+                    quota:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Disk space quota, default is size of related volume.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
                   type: object
                 type: array
               loggers:
@@ -708,6 +751,7 @@ spec:
                       - trace
                       - debug
                       - info
+                      - warning
                       - error
                       type: string
                     name:
@@ -719,11 +763,17 @@ spec:
                           format: int64
                           type: integer
                         maxSegmentSize:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         maxTotalSizeToKeep:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         rotationPeriodMilliseconds:
                           format: int64
                           type: integer
@@ -770,6 +820,14 @@ spec:
                     x-kubernetes-map-type: atomic
                 type: object
               nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
+              podAnnotations:
+                additionalProperties:
+                  type: string
+                type: object
+              podLabels:
                 additionalProperties:
                   type: string
                 type: object
@@ -832,6 +890,11 @@ spec:
                 type: object
               runtimeClassName:
                 type: string
+              setHostnameAsFqdn:
+                default: true
+                description: SetHostnameAsFQDN indicates whether to set the hostname
+                  as FQDN.
+                type: boolean
               structuredLoggers:
                 items:
                   properties:
@@ -859,6 +922,7 @@ spec:
                       - trace
                       - debug
                       - info
+                      - warning
                       - error
                       type: string
                     name:
@@ -870,11 +934,17 @@ spec:
                           format: int64
                           type: integer
                         maxSegmentSize:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         maxTotalSizeToKeep:
-                          format: int64
-                          type: integer
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
                         rotationPeriodMilliseconds:
                           format: int64
                           type: integer
@@ -884,6 +954,11 @@ spec:
                       type: boolean
                   type: object
                 type: array
+              terminationGracePeriodSeconds:
+                description: Optional duration in seconds the pod needs to terminate
+                  gracefully.
+                format: int64
+                type: integer
               tolerations:
                 items:
                   description: |-
@@ -1068,11 +1143,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -1582,11 +1659,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string

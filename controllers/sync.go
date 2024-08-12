@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/components"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/components"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	apiProxy "github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	apiProxy "github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
 )
 
 func (r *YtsaurusReconciler) handleEverything(
@@ -500,7 +500,6 @@ func chooseUpdateFlow(spec ytv1.YtsaurusSpec, needUpdate []components.Component)
 			componentNames: statelessNames,
 		}, ""
 	default:
-		// TODO: just validate it in hook
 		return updateMeta{}, fmt.Sprintf("Unexpected update selector %s", configuredSelector)
 	}
 }
@@ -534,6 +533,7 @@ func (r *YtsaurusReconciler) Sync(ctx context.Context, resource *ytv1.Ytsaurus) 
 		}
 
 	case ytv1.ClusterStateRunning:
+		needUpdate := componentManager.needUpdate()
 		switch {
 		case !componentManager.needSync():
 			logger.Info("Ytsaurus is running and happy")
@@ -544,14 +544,19 @@ func (r *YtsaurusReconciler) Sync(ctx context.Context, resource *ytv1.Ytsaurus) 
 			err := ytsaurus.SaveClusterState(ctx, ytv1.ClusterStateReconfiguration)
 			return ctrl.Result{Requeue: true}, err
 
-		case componentManager.needUpdate() != nil:
-			meta, blockMsg := chooseUpdateFlow(ytsaurus.GetResource().Spec, componentManager.needUpdate())
+		case needUpdate != nil:
+			var needUpdateNames []string
+			for _, c := range needUpdate {
+				needUpdateNames = append(needUpdateNames, c.GetName())
+			}
+			logger = logger.WithValues("componentsForUpdateAll", needUpdateNames)
+			meta, blockMsg := chooseUpdateFlow(ytsaurus.GetResource().Spec, needUpdate)
 			if blockMsg != "" {
 				logger.Info(blockMsg)
 				return ctrl.Result{Requeue: true}, nil
 			}
 			logger.Info("Ytsaurus needs components update",
-				"components", meta.componentNames,
+				"componentsForUpdateSelected", meta.componentNames,
 				"flow", meta.flow,
 			)
 			err = ytsaurus.SaveUpdatingClusterState(ctx, meta.flow, meta.componentNames)

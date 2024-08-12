@@ -5,19 +5,20 @@ import (
 	"fmt"
 	"strings"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
+
 	"go.ytsaurus.tech/yt/go/ypath"
 	"go.ytsaurus.tech/yt/go/yt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type QueryTracker struct {
@@ -47,7 +48,7 @@ func NewQueryTracker(
 	}
 
 	if resource.Spec.QueryTrackers.InstanceSpec.MonitoringPort == nil {
-		resource.Spec.QueryTrackers.InstanceSpec.MonitoringPort = ptr.Int32(consts.QueryTrackerMonitoringPort)
+		resource.Spec.QueryTrackers.InstanceSpec.MonitoringPort = ptr.To(int32(consts.QueryTrackerMonitoringPort))
 	}
 
 	srv := newServer(
@@ -59,6 +60,11 @@ func NewQueryTracker(
 		cfgen.GetQueryTrackerStatefulSetName(),
 		cfgen.GetQueryTrackerServiceName(),
 		func() ([]byte, error) { return cfgen.GetQueryTrackerConfig(resource.Spec.QueryTrackers) },
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.QueryTrackerRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	image := ytsaurus.GetResource().Spec.CoreImage
@@ -263,8 +269,9 @@ func (qt *QueryTracker) init(ctx context.Context, ytClient yt.Client) (err error
 		map[string]interface{}{
 			"stages": map[string]interface{}{
 				"production": map[string]interface{}{
-					"root": "//sys/query_tracker",
-					"user": "query_tracker",
+					"root":    "//sys/query_tracker",
+					"user":    "query_tracker",
+					"channel": map[string]interface{}{"addresses": qt.cfgen.GetQueryTrackerAddresses()},
 				},
 			},
 		},
@@ -379,6 +386,27 @@ func (qt *QueryTracker) init(ctx context.Context, ytClient yt.Client) (err error
 		logger.Error(err, "Creating access control object 'everyone-use' in namespace 'queries' failed")
 		return
 	}
+
+	_, err = ytClient.CreateObject(
+		ctx,
+		yt.NodeAccessControlObject,
+		&yt.CreateObjectOptions{
+			Attributes: map[string]interface{}{
+				"name":      "everyone-share",
+				"namespace": "queries",
+				"principal_acl": []interface{}{map[string]interface{}{
+					"action":      "allow",
+					"subjects":    []string{"everyone"},
+					"permissions": []string{"read", "use"},
+				}},
+			},
+			IgnoreExisting: true,
+		},
+	)
+	if err != nil {
+		logger.Error(err, "Creating access control object 'everyone-share' in namespace 'queries' failed")
+		return
+	}
 	return
 }
 
@@ -411,12 +439,12 @@ func (qt *QueryTracker) updateQTState(ctx context.Context, dry bool) (*Component
 	switch qt.ytsaurus.GetUpdateState() {
 	case ytv1.UpdateStateWaitingForQTStateUpdatingPrepare:
 		if !qt.initQTState.isRestartPrepared() {
-			return ptr.T(SimpleStatus(SyncStatusUpdating)), qt.initQTState.prepareRestart(ctx, dry)
+			return ptr.To(SimpleStatus(SyncStatusUpdating)), qt.initQTState.prepareRestart(ctx, dry)
 		}
 		if !dry {
 			qt.setConditionQTStatePreparedForUpdating(ctx)
 		}
-		return ptr.T(SimpleStatus(SyncStatusUpdating)), err
+		return ptr.To(SimpleStatus(SyncStatusUpdating)), err
 	case ytv1.UpdateStateWaitingForQTStateUpdate:
 		if !qt.initQTState.isRestartCompleted() {
 			return nil, nil
@@ -424,7 +452,7 @@ func (qt *QueryTracker) updateQTState(ctx context.Context, dry bool) (*Component
 		if !dry {
 			qt.setConditionQTStateUpdated(ctx)
 		}
-		return ptr.T(SimpleStatus(SyncStatusUpdating)), err
+		return ptr.To(SimpleStatus(SyncStatusUpdating)), err
 	default:
 		return nil, nil
 	}

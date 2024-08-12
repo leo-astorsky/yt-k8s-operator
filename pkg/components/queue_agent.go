@@ -5,19 +5,20 @@ import (
 	"fmt"
 	"strings"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
+
 	"go.ytsaurus.tech/yt/go/ypath"
 	"go.ytsaurus.tech/yt/go/yt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type QueueAgent struct {
@@ -49,7 +50,7 @@ func NewQueueAgent(
 	}
 
 	if resource.Spec.QueueAgents.InstanceSpec.MonitoringPort == nil {
-		resource.Spec.QueueAgents.InstanceSpec.MonitoringPort = ptr.Int32(consts.QueueAgentMonitoringPort)
+		resource.Spec.QueueAgents.InstanceSpec.MonitoringPort = ptr.To(int32(consts.QueueAgentMonitoringPort))
 	}
 
 	srv := newServer(
@@ -61,6 +62,11 @@ func NewQueueAgent(
 		cfgen.GetQueueAgentStatefulSetName(),
 		cfgen.GetQueueAgentServiceName(),
 		func() ([]byte, error) { return cfgen.GetQueueAgentConfig(resource.Spec.QueueAgents) },
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.QueueAgentRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	image := ytsaurus.GetResource().Spec.CoreImage

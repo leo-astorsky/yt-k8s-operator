@@ -3,14 +3,15 @@ package components
 import (
 	"context"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type ControllerAgent struct {
@@ -29,7 +30,7 @@ func NewControllerAgent(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus, 
 	}
 
 	if resource.Spec.ControllerAgents.InstanceSpec.MonitoringPort == nil {
-		resource.Spec.ControllerAgents.InstanceSpec.MonitoringPort = ptr.Int32(consts.ControllerAgentMonitoringPort)
+		resource.Spec.ControllerAgents.InstanceSpec.MonitoringPort = ptr.To(int32(consts.ControllerAgentMonitoringPort))
 	}
 
 	srv := newServer(
@@ -41,6 +42,11 @@ func NewControllerAgent(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus, 
 		"ca",
 		"controller-agents",
 		func() ([]byte, error) { return cfgen.GetControllerAgentConfig(resource.Spec.ControllerAgents) },
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.ControllerAgentRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	return &ControllerAgent{

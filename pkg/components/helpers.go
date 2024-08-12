@@ -3,19 +3,23 @@ package components
 import (
 	"context"
 	"fmt"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"strings"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+
+	"k8s.io/apimachinery/pkg/util/yaml"
+
+	"k8s.io/utils/ptr"
+
 	"go.ytsaurus.tech/yt/go/ypath"
 	"go.ytsaurus.tech/yt/go/yson"
 	"go.ytsaurus.tech/yt/go/yt"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
 )
 
 func CreateTabletCells(ctx context.Context, ytClient yt.Client, bundle string, tabletCellCount int) error {
@@ -28,7 +32,6 @@ func CreateTabletCells(ctx context.Context, ytClient yt.Client, bundle string, t
 		ypath.Path(fmt.Sprintf("//sys/tablet_cell_bundles/%s/@tablet_cell_count", bundle)),
 		&initTabletCellCount,
 		nil); err != nil {
-
 		logger.Error(err, "Getting table_cell_count failed")
 		return err
 	}
@@ -130,14 +133,14 @@ func handleUpdatingClusterState(
 			if !dry {
 				err = removePods(ctx, server, cmpBase)
 			}
-			return ptr.T(WaitingStatus(SyncStatusUpdating, "pods removal")), err
+			return ptr.To(WaitingStatus(SyncStatusUpdating, "pods removal")), err
 		}
 
 		if ytsaurus.GetUpdateState() != ytv1.UpdateStateWaitingForPodsCreation {
-			return ptr.T(NewComponentStatus(SyncStatusReady, "Nothing to do now")), err
+			return ptr.To(NewComponentStatus(SyncStatusReady, "Nothing to do now")), err
 		}
 	} else {
-		return ptr.T(NewComponentStatus(SyncStatusReady, "Not updating component")), err
+		return ptr.To(NewComponentStatus(SyncStatusReady, "Not updating component")), err
 	}
 	return nil, err
 }
@@ -173,7 +176,6 @@ func SetWithIgnoreExisting(path string, value string) string {
 func AddAffinity(statefulSet *appsv1.StatefulSet,
 	nodeSelectorRequirementKey string,
 	nodeSelectorRequirementValues []string) {
-
 	affinity := &corev1.Affinity{}
 	if statefulSet.Spec.Template.Spec.Affinity != nil {
 		affinity = statefulSet.Spec.Template.Spec.Affinity
@@ -201,4 +203,27 @@ func AddAffinity(statefulSet *appsv1.StatefulSet,
 	nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = selector
 	affinity.NodeAffinity = nodeAffinity
 	statefulSet.Spec.Template.Spec.Affinity = affinity
+}
+
+func AddSidecarsToPodSpec(sidecar []string, podSpec *corev1.PodSpec) error {
+	for _, sidecarSpec := range sidecar {
+		sidecar := corev1.Container{}
+		if err := yaml.UnmarshalStrict([]byte(sidecarSpec), &sidecar); err != nil {
+			return err
+		}
+		podSpec.Containers = append(podSpec.Containers, sidecar)
+	}
+	return nil
+}
+
+func AddInitContainersToPodSpec(initContainers []string, podSpec *corev1.PodSpec) error {
+	containers := make([]corev1.Container, len(initContainers), len(initContainers)+len(podSpec.InitContainers))
+	for i, spec := range initContainers {
+		if err := yaml.UnmarshalStrict([]byte(spec), &containers[i]); err != nil {
+			return err
+		}
+	}
+	// Insert new containers into head
+	podSpec.InitContainers = append(containers, podSpec.InitContainers...)
+	return nil
 }

@@ -3,15 +3,17 @@ package components
 import (
 	"context"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	ptr "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 // microservice manages common resources of YTsaurus service component
@@ -183,7 +185,7 @@ func (m *microserviceImpl) podsImageCorrespondsToSpec() bool {
 func (m *microserviceImpl) removePods(ctx context.Context) error {
 	m.builtDeployment = m.deployment.Build()
 	m.builtDeployment.Spec = m.deployment.OldObject().(*appsv1.Deployment).Spec
-	m.builtDeployment.Spec.Replicas = ptr.Int32(0)
+	m.builtDeployment.Spec.Replicas = ptr.To(int32(0))
 	return m.Sync(ctx)
 }
 

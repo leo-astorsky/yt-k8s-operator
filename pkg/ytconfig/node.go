@@ -8,13 +8,14 @@ import (
 
 	"go.ytsaurus.tech/yt/go/yson"
 
-	ptr "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
 	corev1 "k8s.io/api/core/v1"
+
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
 )
 
 type NodeFlavor string
@@ -33,6 +34,8 @@ type StoreLocation struct {
 	HighWatermark          int64     `yson:"high_watermark,omitempty"`
 	LowWatermark           int64     `yson:"low_watermark,omitempty"`
 	DisableWritesWatermark int64     `yson:"disable_writes_watermark,omitempty"`
+	TrashCleanupWatermark  int64     `yson:"trash_cleanup_watermark"`
+	MaxTrashTtl            *int64    `yson:"max_trash_ttl,omitempty"`
 }
 
 type ResourceLimits struct {
@@ -89,11 +92,26 @@ type CriExecutor struct {
 	CpuPeriod       yson.Duration `yson:"cpu_period,omitempty"`
 }
 
+type CriImageCache struct {
+	Capacity *int64 `yson:"capacity,omitempty"`
+
+	ManagedPrefixes   []string `yson:"managed_prefixes,omitempty"`
+	UnmanagedPrefixes []string `yson:"managed_prefixes,omitempty"`
+	PinnedImages      []string `yson:"pinned_image,omitempty"`
+
+	AlwaysPullLatest                *bool         `yson:"always_pull_latest,omitempty"`
+	PullPeriod                      yson.Duration `yson:"pullPeriod,omitempty"`
+	ImageSizeEstimation             *int64        `yson:"image_size_estimation,omitempty"`
+	ImageCompressionRatioEstimation *float32      `yson:"image_compression_ratio_estimation,omitempty"`
+	YoungerSizeFraction             *float32      `yson:"younger_size_fraction,omitempty"`
+}
+
 type CriJobEnvironment struct {
-	CriExecutor          *CriExecutor `yson:"cri_executor,omitempty"`
-	JobProxyImage        string       `yson:"job_proxy_image,omitempty"`
-	JobProxyBindMounts   []BindMount  `yson:"job_proxy_bind_mounts,omitempty"`
-	UseJobProxyFromImage *bool        `yson:"use_job_proxy_from_image,omitempty"`
+	CriExecutor          *CriExecutor   `yson:"cri_executor,omitempty"`
+	CriImageCache        *CriImageCache `yson:"cri_image_cache,omitempty"`
+	JobProxyImage        string         `yson:"job_proxy_image,omitempty"`
+	JobProxyBindMounts   []BindMount    `yson:"job_proxy_bind_mounts,omitempty"`
+	UseJobProxyFromImage *bool          `yson:"use_job_proxy_from_image,omitempty"`
 }
 
 type JobEnvironment struct {
@@ -224,26 +242,24 @@ func findVolume(volumeName string, spec ytv1.InstanceSpec) *corev1.Volume {
 	return nil
 }
 
-func findQuotaForPath(locationPath string, spec ytv1.InstanceSpec) *int64 {
-	mount := findVolumeMountForPath(locationPath, spec)
+func findQuotaForLocation(location ytv1.LocationSpec, spec ytv1.InstanceSpec) *int64 {
+	if quota := location.Quota; quota != nil {
+		return ptr.To(quota.Value())
+	}
+
+	mount := findVolumeMountForPath(location.Path, spec)
 	if mount == nil {
 		return nil
 	}
 
 	if claim := findVolumeClaimTemplate(mount.Name, spec); claim != nil {
 		storage := claim.Spec.Resources.Requests.Storage()
-		if storage != nil {
-			value := storage.Value()
-			return &value
-		} else {
-			return nil
+		if storage != nil && !storage.IsZero() {
+			return ptr.To(storage.Value())
 		}
-	}
-
-	if volume := findVolume(mount.Name, spec); volume != nil {
+	} else if volume := findVolume(mount.Name, spec); volume != nil {
 		if volume.EmptyDir != nil && volume.EmptyDir.SizeLimit != nil {
-			value := volume.EmptyDir.SizeLimit.Value()
-			return &value
+			return ptr.To(volume.EmptyDir.SizeLimit.Value())
 		}
 	}
 
@@ -302,7 +318,7 @@ func getDataNodeServerCarcass(spec *ytv1.DataNodesSpec) (DataNodeServer, error) 
 	c.ResourceLimits = getDataNodeResourceLimits(spec)
 
 	for _, location := range ytv1.FindAllLocations(spec.Locations, ytv1.LocationTypeChunkStore) {
-		quota := findQuotaForPath(location.Path, spec.InstanceSpec)
+		quota := findQuotaForLocation(location, spec.InstanceSpec)
 		storeLocation := StoreLocation{
 			MediumName: location.Medium,
 			Path:       location.Path,
@@ -310,11 +326,18 @@ func getDataNodeServerCarcass(spec *ytv1.DataNodesSpec) (DataNodeServer, error) 
 		if quota != nil {
 			storeLocation.Quota = *quota
 
+			if location.LowWatermark != nil {
+				storeLocation.LowWatermark = location.LowWatermark.Value()
+			} else {
+				gb := float64(1024 * 1024 * 1024)
+				storeLocation.LowWatermark = int64(math.Min(0.1*float64(storeLocation.Quota), float64(25)*gb))
+			}
+
 			// These are just simple heuristics.
-			gb := float64(1024 * 1024 * 1024)
-			storeLocation.LowWatermark = int64(math.Min(0.1*float64(storeLocation.Quota), float64(5)*gb))
 			storeLocation.HighWatermark = storeLocation.LowWatermark / 2
 			storeLocation.DisableWritesWatermark = storeLocation.HighWatermark / 2
+			storeLocation.TrashCleanupWatermark = storeLocation.LowWatermark
+			storeLocation.MaxTrashTtl = location.MaxTrashMilliseconds
 		}
 		c.DataNode.StoreLocations = append(c.DataNode.StoreLocations, storeLocation)
 	}
@@ -351,15 +374,15 @@ func getExecNodeResourceLimits(spec *ytv1.ExecNodesSpec) ResourceLimits {
 		totalMemory.Add(getResourceQuantity(spec.JobResources, corev1.ResourceMemory))
 		totalCpu.Add(getResourceQuantity(spec.JobResources, corev1.ResourceCPU))
 
-		resourceLimits.NodeDedicatedCpu = ptr.Float32(float32(nodeCpu.AsApproximateFloat64()))
+		resourceLimits.NodeDedicatedCpu = ptr.To(float32(nodeCpu.AsApproximateFloat64()))
 	} else {
 		// TODO(khlebnikov): Add better defaults.
-		resourceLimits.NodeDedicatedCpu = ptr.Float32(0)
+		resourceLimits.NodeDedicatedCpu = ptr.To(float32(0))
 	}
 
 	resourceLimits.TotalMemory = totalMemory.Value()
 	if !totalCpu.IsZero() {
-		resourceLimits.TotalCpu = ptr.Float32(float32(totalCpu.AsApproximateFloat64()))
+		resourceLimits.TotalCpu = ptr.To(float32(totalCpu.AsApproximateFloat64()))
 	}
 
 	return resourceLimits
@@ -384,18 +407,18 @@ func fillJobEnvironment(execNode *ExecNode, spec *ytv1.ExecNodesSpec, commonSpec
 		if jobImage := commonSpec.JobImage; jobImage != nil {
 			jobEnv.JobProxyImage = *jobImage
 		} else {
-			jobEnv.JobProxyImage = ptr.StringDeref(spec.Image, commonSpec.CoreImage)
+			jobEnv.JobProxyImage = ptr.Deref(spec.Image, commonSpec.CoreImage)
 		}
 
-		jobEnv.UseJobProxyFromImage = ptr.Bool(false)
+		jobEnv.UseJobProxyFromImage = ptr.To(false)
 
-		endpoint := "unix://" + getContainerdSocketPath(spec)
+		endpoint := "unix://" + GetContainerdSocketPath(spec)
 
 		jobEnv.CriExecutor = &CriExecutor{
 			RuntimeEndpoint: endpoint,
 			ImageEndpoint:   endpoint,
-			Namespace:       ptr.StringDeref(envSpec.CRI.CRINamespace, consts.CRINamespace),
-			BaseCgroup:      ptr.StringDeref(envSpec.CRI.BaseCgroup, consts.CRIBaseCgroup),
+			Namespace:       ptr.Deref(envSpec.CRI.CRINamespace, consts.CRINamespace),
+			BaseCgroup:      ptr.Deref(envSpec.CRI.BaseCgroup, consts.CRIBaseCgroup),
 		}
 
 		if timeout := envSpec.CRI.APIRetryTimeoutSeconds; timeout != nil {
@@ -406,8 +429,22 @@ func fillJobEnvironment(execNode *ExecNode, spec *ytv1.ExecNodesSpec, commonSpec
 			}
 		}
 
+		if location := ytv1.FindFirstLocation(spec.Locations, ytv1.LocationTypeImageCache); location != nil {
+			jobEnv.CriImageCache = &CriImageCache{
+				Capacity:            findQuotaForLocation(*location, spec.InstanceSpec),
+				ImageSizeEstimation: envSpec.CRI.ImageSizeEstimation,
+				AlwaysPullLatest:    envSpec.CRI.AlwaysPullLatestImage,
+			}
+			if ratio := envSpec.CRI.ImageCompressionRatioEstimation; ratio != nil {
+				jobEnv.CriImageCache.ImageCompressionRatioEstimation = ptr.To(float32(*ratio))
+			}
+			if period := envSpec.CRI.ImagePullPeriodSeconds; period != nil {
+				jobEnv.CriImageCache.PullPeriod = yson.Duration(time.Duration(*period) * time.Second)
+			}
+		}
+
 		// NOTE: Default was "false", now it's "true" and option was moved into dynamic config.
-		execNode.UseArtifactBindsLegacy = ptr.Bool(ptr.BoolDeref(envSpec.UseArtifactBinds, true))
+		execNode.UseArtifactBindsLegacy = ptr.To(ptr.Deref(envSpec.UseArtifactBinds, true))
 		if !*execNode.UseArtifactBindsLegacy {
 			// Bind mount chunk cache into job containers if artifact are passed via symlinks.
 			for _, location := range ytv1.FindAllLocations(spec.Locations, ytv1.LocationTypeChunkCache) {
@@ -420,14 +457,14 @@ func fillJobEnvironment(execNode *ExecNode, spec *ytv1.ExecNodesSpec, commonSpec
 		}
 
 		// FIXME(khlebnikov): For now running jobs as non-root is more likely broken.
-		execNode.SlotManager.DoNotSetUserId = ptr.Bool(ptr.BoolDeref(envSpec.DoNotSetUserId, true))
+		execNode.SlotManager.DoNotSetUserId = ptr.To(ptr.Deref(envSpec.DoNotSetUserId, true))
 
 		// Enable tmpfs if exec node can mount and propagate into job container.
-		execNode.SlotManager.EnableTmpfs = ptr.Bool(func() bool {
+		execNode.SlotManager.EnableTmpfs = ptr.To(func() bool {
 			if !spec.Privileged {
 				return false
 			}
-			if !ptr.BoolDeref(envSpec.Isolated, true) {
+			if !ptr.Deref(envSpec.Isolated, true) {
 				return true
 			}
 			for _, location := range ytv1.FindAllLocations(spec.Locations, ytv1.LocationTypeSlots) {
@@ -440,14 +477,14 @@ func fillJobEnvironment(execNode *ExecNode, spec *ytv1.ExecNodesSpec, commonSpec
 		}())
 
 		// Forward environment variables set in docker image from job proxy to user job process.
-		execNode.JobProxy.ForwardAllEnvironmentVariables = ptr.Bool(true)
+		execNode.JobProxy.ForwardAllEnvironmentVariables = ptr.To(true)
 	} else if commonSpec.UsePorto {
 		jobEnv.Type = JobEnvironmentTypePorto
-		execNode.SlotManager.EnableTmpfs = ptr.Bool(true)
+		execNode.SlotManager.EnableTmpfs = ptr.To(true)
 		// TODO(psushin): volume locations, root fs binds, etc.
 	} else {
 		jobEnv.Type = JobEnvironmentTypeSimple
-		execNode.SlotManager.EnableTmpfs = ptr.Bool(spec.Privileged)
+		execNode.SlotManager.EnableTmpfs = ptr.To(spec.Privileged)
 	}
 
 	return nil
@@ -475,18 +512,18 @@ func getExecNodeServerCarcass(spec *ytv1.ExecNodesSpec, commonSpec *ytv1.CommonS
 			MediumName: location.Medium,
 		}
 
-		if quota := findQuotaForPath(location.Path, spec.InstanceSpec); quota != nil {
+		if quota := findQuotaForLocation(location, spec.InstanceSpec); quota != nil {
 			slotLocation.DiskQuota = quota
 
 			// These are just simple heuristics.
-			slotLocation.DiskUsageWatermark = ptr.Int64(min(*quota/10, consts.MaxSlotLocationReserve))
+			slotLocation.DiskUsageWatermark = ptr.To(min(*quota/10, consts.MaxSlotLocationReserve))
 		} else {
 			// Do not reserve anything if total disk size is unknown.
-			slotLocation.DiskUsageWatermark = ptr.Int64(0)
+			slotLocation.DiskUsageWatermark = ptr.To(int64(0))
 		}
 
 		// Disk quota isn't generally available for k8s volumes yet.
-		slotLocation.EnableDiskQuota = ptr.Bool(false)
+		slotLocation.EnableDiskQuota = ptr.To(false)
 
 		c.ExecNode.SlotManager.Locations = append(c.ExecNode.SlotManager.Locations, slotLocation)
 	}
@@ -496,12 +533,12 @@ func getExecNodeServerCarcass(spec *ytv1.ExecNodesSpec, commonSpec *ytv1.CommonS
 	}
 
 	if spec.JobEnvironment != nil && spec.JobEnvironment.UserSlots != nil {
-		c.JobResourceManager.ResourceLimits.UserSlots = ptr.Int(*spec.JobEnvironment.UserSlots)
+		c.JobResourceManager.ResourceLimits.UserSlots = ptr.To(*spec.JobEnvironment.UserSlots)
 	} else {
 		// Dummy heuristic.
-		jobCpu := ptr.Float32Deref(c.ResourceLimits.TotalCpu, 0) - ptr.Float32Deref(c.ResourceLimits.NodeDedicatedCpu, 0)
+		jobCpu := ptr.Deref(c.ResourceLimits.TotalCpu, 0) - ptr.Deref(c.ResourceLimits.NodeDedicatedCpu, 0)
 		if jobCpu > 0 {
-			c.JobResourceManager.ResourceLimits.UserSlots = ptr.Int(int(5 * jobCpu))
+			c.JobResourceManager.ResourceLimits.UserSlots = ptr.To(int(5 * jobCpu))
 		}
 	}
 

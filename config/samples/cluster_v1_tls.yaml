@@ -10,8 +10,8 @@ metadata:
   namespace: minisaurus
   name: minisaurus
 spec:
-  coreImage: ytsaurus/ytsaurus:stable-23.1.0-relwithdebinfo
-  uiImage: ytsaurus/ui:stable
+  coreImage: ghcr.io/ytsaurus/ytsaurus:stable-23.2.0-relwithdebinfo
+  uiImage: ghcr.io/ytsaurus/ui:stable
 
   useIpv4: true
   useIpv6: true
@@ -45,7 +45,7 @@ spec:
           rotationPeriodMilliseconds: 900000
         categoriesFilter:
           type: exclude
-          values: ["Bus"]
+          values: [ "Bus", "Concurrency" ]
       - name: info
         minLogLevel: info
         writerType: file

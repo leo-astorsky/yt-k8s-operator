@@ -3,7 +3,7 @@ package ytconfig
 import (
 	"fmt"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
 )
 
 func (g *BaseGenerator) getName(shortName string) string {
@@ -51,6 +51,15 @@ func (g *BaseGenerator) GetDiscoveryPodNames() []string {
 	podNames := make([]string, 0, g.discoveryInstanceCount)
 	for i := 0; i < int(g.discoveryInstanceCount); i++ {
 		podNames = append(podNames, fmt.Sprintf("%s-%d", g.GetDiscoveryStatefulSetName(), i))
+	}
+
+	return podNames
+}
+
+func (g *Generator) GetQueryTrackerPodNames() []string {
+	podNames := make([]string, 0, g.ytsaurus.Spec.QueryTrackers.InstanceSpec.InstanceCount)
+	for i := 0; i < int(g.ytsaurus.Spec.QueryTrackers.InstanceSpec.InstanceCount); i++ {
+		podNames = append(podNames, fmt.Sprintf("%s-%d", g.GetQueryTrackerStatefulSetName(), i))
 	}
 
 	return podNames

@@ -33,6 +33,7 @@ controllerManager:
         drop:
         - ALL
     env:
+      watchNamespace: ""
       ytLogLevel: DEBUG
     image:
       repository: ytsaurus/k8s-operator
@@ -45,6 +46,7 @@ controllerManager:
         cpu: 10m
         memory: 64Mi
   replicas: 1
+  revisionHistoryLimit: 10
   serviceAccount:
     annotations: {}
 kubernetesClusterDomain: cluster.local

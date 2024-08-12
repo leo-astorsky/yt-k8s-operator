@@ -3,15 +3,16 @@ package components
 import (
 	"context"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
+
 	corev1 "k8s.io/api/core/v1"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type RpcProxy struct {
@@ -39,7 +40,7 @@ func NewRPCProxy(
 	}
 
 	if spec.InstanceSpec.MonitoringPort == nil {
-		spec.InstanceSpec.MonitoringPort = ptr.Int32(consts.RPCProxyMonitoringPort)
+		spec.InstanceSpec.MonitoringPort = ptr.To(int32(consts.RPCProxyMonitoringPort))
 	}
 
 	srv := newServer(
@@ -53,6 +54,11 @@ func NewRPCProxy(
 		func() ([]byte, error) {
 			return cfgen.GetRPCProxyConfig(spec)
 		},
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.RPCProxyRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	var balancingService *resources.RPCService = nil

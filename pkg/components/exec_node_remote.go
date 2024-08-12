@@ -3,13 +3,14 @@ package components
 import (
 	"context"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type RemoteExecNode struct {
@@ -32,7 +33,7 @@ func NewRemoteExecNodes(
 	}
 
 	if spec.InstanceSpec.MonitoringPort == nil {
-		spec.InstanceSpec.MonitoringPort = ptr.Int32(consts.ExecNodeMonitoringPort)
+		spec.InstanceSpec.MonitoringPort = ptr.To(int32(consts.ExecNodeMonitoringPort))
 	}
 
 	srv := newServerConfigured(
@@ -47,13 +48,37 @@ func NewRemoteExecNodes(
 		func() ([]byte, error) {
 			return cfgen.GetExecNodeConfig(spec)
 		},
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.ExecNodeRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
+
+	var sidecarConfig *ConfigHelper
+	if spec.JobEnvironment != nil && spec.JobEnvironment.CRI != nil {
+		sidecarConfig = NewConfigHelper(
+			&l,
+			proxy,
+			l.GetSidecarConfigMapName(consts.JobsContainerName),
+			commonSpec.ConfigOverrides,
+			map[string]ytconfig.GeneratorDescriptor{
+				consts.ContainerdConfigFileName: {
+					F: func() ([]byte, error) {
+						return cfgen.GetContainerdConfig(&spec)
+					},
+					Fmt: ytconfig.ConfigFormatToml,
+				},
+			})
+	}
+
 	return &RemoteExecNode{
 		baseComponent: baseComponent{labeller: &l},
 		baseExecNode: baseExecNode{
-			server: srv,
-			cfgen:  cfgen,
-			spec:   &spec,
+			server:        srv,
+			cfgen:         cfgen,
+			spec:          &spec,
+			sidecarConfig: sidecarConfig,
 		},
 	}
 }

@@ -6,14 +6,13 @@ import (
 	"path"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	ptr "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type baseExecNode struct {
@@ -45,6 +44,39 @@ func (n *baseExecNode) doBuildBase() error {
 	statefulSet := n.server.buildStatefulSet()
 	podSpec := &statefulSet.Spec.Template.Spec
 
+	if len(podSpec.Containers) != 1 {
+		log.Panicf("Number of exec node containers is expected to be 1, actual %v", len(podSpec.Containers))
+	}
+
+	if err := AddInitContainersToPodSpec(n.spec.InitContainers, podSpec); err != nil {
+		return err
+	}
+
+	if err := AddSidecarsToPodSpec(n.spec.Sidecars, podSpec); err != nil {
+		return err
+	}
+
+	setContainerPrivileged := func(ct *corev1.Container) {
+		if ct.SecurityContext == nil {
+			ct.SecurityContext = &corev1.SecurityContext{}
+		}
+		if ct.SecurityContext.Privileged == nil {
+			ct.SecurityContext.Privileged = ptr.To(n.spec.Privileged)
+		}
+	}
+
+	for i := range podSpec.InitContainers {
+		setContainerPrivileged(&podSpec.InitContainers[i])
+	}
+
+	for i := range podSpec.Containers {
+		setContainerPrivileged(&podSpec.Containers[i])
+
+		if envSpec := n.spec.JobEnvironment; envSpec != nil && envSpec.CRI != nil {
+			n.addEnvironmentForCRITools(&podSpec.Containers[i])
+		}
+	}
+
 	// Pour job resources into node container if jobs are not isolated.
 	if n.spec.JobResources != nil && !n.IsJobEnvironmentIsolated() {
 		addResourceList := func(list, newList corev1.ResourceList) {
@@ -60,22 +92,6 @@ func (n *baseExecNode) doBuildBase() error {
 
 		addResourceList(podSpec.Containers[0].Resources.Requests, n.spec.JobResources.Requests)
 		addResourceList(podSpec.Containers[0].Resources.Limits, n.spec.JobResources.Limits)
-	}
-
-	setContainerPrivileged := func(ct *corev1.Container) {
-		if ct.SecurityContext == nil {
-			ct.SecurityContext = &corev1.SecurityContext{}
-		}
-		ct.SecurityContext.Privileged = ptr.Bool(n.spec.Privileged)
-	}
-
-	if len(podSpec.Containers) != 1 {
-		log.Panicf("Number of exec node containers is expected to be 1, actual %v", len(podSpec.Containers))
-	}
-	setContainerPrivileged(&podSpec.Containers[0])
-
-	for i := range podSpec.InitContainers {
-		setContainerPrivileged(&podSpec.InitContainers[i])
 	}
 
 	if n.IsJobEnvironmentIsolated() {
@@ -94,14 +110,6 @@ func (n *baseExecNode) doBuildBase() error {
 			})
 	}
 
-	for _, sidecarSpec := range n.spec.Sidecars {
-		sidecar := corev1.Container{}
-		if err := yaml.Unmarshal([]byte(sidecarSpec), &sidecar); err != nil {
-			return err
-		}
-		podSpec.Containers = append(podSpec.Containers, sidecar)
-	}
-
 	if n.sidecarConfig != nil {
 		podSpec.Volumes = append(podSpec.Volumes, createConfigVolume(consts.ContainerdConfigVolumeName,
 			n.sidecarConfig.labeller.GetSidecarConfigMapName(consts.JobsContainerName), nil))
@@ -110,6 +118,15 @@ func (n *baseExecNode) doBuildBase() error {
 	}
 
 	return nil
+}
+
+func (n *baseExecNode) addEnvironmentForCRITools(container *corev1.Container) {
+	socketPath := ytconfig.GetContainerdSocketPath(n.spec)
+	container.Env = append(container.Env, []corev1.EnvVar{
+		{Name: "CONTAINERD_ADDRESS", Value: socketPath},                     // ctr
+		{Name: "CONTAINERD_NAMESPACE", Value: "k8s.io"},                     // ctr
+		{Name: "CONTAINER_RUNTIME_ENDPOINT", Value: "unix://" + socketPath}, // crictl
+	}...)
 }
 
 func (n *baseExecNode) doBuildCRISidecar(envSpec *ytv1.JobEnvironmentSpec, podSpec *corev1.PodSpec) {
@@ -129,9 +146,11 @@ func (n *baseExecNode) doBuildCRISidecar(envSpec *ytv1.JobEnvironmentSpec, podSp
 		Args:         []string{"--config", configPath},
 		VolumeMounts: createVolumeMounts(n.spec.VolumeMounts),
 		SecurityContext: &corev1.SecurityContext{
-			Privileged: ptr.Bool(true),
+			Privileged: ptr.To(true),
 		},
 	}
+
+	n.addEnvironmentForCRITools(&jobsContainer)
 
 	jobsContainer.VolumeMounts = append(jobsContainer.VolumeMounts,
 		corev1.VolumeMount{
@@ -151,7 +170,7 @@ func (n *baseExecNode) doBuildCRISidecar(envSpec *ytv1.JobEnvironmentSpec, podSp
 	}
 
 	if n.spec.JobResources != nil {
-		jobsContainer.Resources = *n.spec.JobResources
+		jobsContainer.Resources = *n.spec.JobResources.DeepCopy()
 	} else {
 		// Without dedicated job resources enforce same limits as for node.
 		jobsContainer.Resources.Limits = n.spec.Resources.Limits

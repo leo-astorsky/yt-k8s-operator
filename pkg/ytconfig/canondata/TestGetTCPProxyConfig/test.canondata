@@ -6,6 +6,12 @@
         "force_tcp"=%false;
         retries=1000;
     };
+    "solomon_exporter"={
+        host="{POD_SHORT_HOSTNAME}";
+        "instance_tags"={
+            pod="{K8S_POD_NAME}";
+        };
+    };
     logging={
         writers={
             info={
@@ -80,6 +86,7 @@
         "k8s_node_name"="{K8S_NODE_NAME}";
         "k8s_pod_name"="{K8S_POD_NAME}";
         "k8s_pod_namespace"="{K8S_POD_NAMESPACE}";
+        "physical_host"="{K8S_NODE_NAME}";
     };
     role=default;
 }

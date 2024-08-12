@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 )
 
 type TestHelper struct {
@@ -280,7 +280,6 @@ func FetchAndCheckConfigMapContainsEventually(h *TestHelper, objectKey, cmKey, e
 	require.Contains(h.t, cmData, cmKey)
 	ysonContent := cmData[cmKey]
 	require.Contains(h.t, ysonContent, expectSubstr)
-
 }
 
 func FetchConfigMapData(h *TestHelper, objectKey, mapKey string) string {

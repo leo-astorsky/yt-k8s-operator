@@ -4,17 +4,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/canonize"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/canonize"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 		Name:      testYtsaurusName,
 	}
 	testLogRotationPeriod   int64 = 900000
-	testTotalLogSize              = 10 * int64(1<<30)
+	testTotalLogSize              = resource.MustParse("10Gi")
 	testMasterExternalHosts       = []string{
 		"host1.external.address",
 		"host2.external.address",
@@ -37,7 +37,7 @@ var (
 		"host2.external.address",
 		"host3.external.address",
 	}
-	testBasicInstanceSpec = ytv1.InstanceSpec{InstanceCount: 3, MonitoringPort: ptr.Int32(12345)}
+	testBasicInstanceSpec = ytv1.InstanceSpec{InstanceCount: 3, MonitoringPort: ptr.To(int32(12345))}
 	testStorageClassname  = "yc-network-hdd"
 	testResourceReqs      = corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
@@ -45,22 +45,48 @@ var (
 			corev1.ResourceMemory: *resource.NewQuantity(5*1024*1024*1024, resource.BinarySI),
 		},
 	}
+	testJobResourceReqs = corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    *resource.NewQuantity(99, resource.BinarySI),
+			corev1.ResourceMemory: *resource.NewQuantity(99*1024*1024*1024, resource.BinarySI),
+		},
+	}
 	testLocationChunkStore = ytv1.LocationSpec{
 		LocationType: "ChunkStore",
 		Path:         "/yt/hdd1/chunk-store",
 		Medium:       "nvme",
 	}
+	testMaxTrashMilliseconds       int64 = 60000
+	testLocationChunkStoreMaxTrash       = ytv1.LocationSpec{
+		LocationType:         "ChunkStore",
+		Path:                 "/yt/hdd1/chunk-store",
+		Medium:               "nvme",
+		MaxTrashMilliseconds: &testMaxTrashMilliseconds,
+	}
+	testLocationChunkStoreQuota        = resource.MustParse("1Ti")
+	testLocationChunkStoreLowWatermark = resource.MustParse("50Gi")
+	testLocationChunkStoreWatermark    = ytv1.LocationSpec{
+		LocationType: "ChunkStore",
+		Path:         "/yt/hdd1/chunk-store",
+		Medium:       "nvme",
+		Quota:        &testLocationChunkStoreQuota,
+		LowWatermark: &testLocationChunkStoreLowWatermark,
+	}
 	testLocationChunkCache = ytv1.LocationSpec{
 		LocationType: "ChunkCache",
 		Path:         "/yt/hdd1/chunk-cache",
 	}
-	testLocationSlots = ytv1.LocationSpec{
+	testLocationSlotsQuota = resource.MustParse("5Gi")
+	testLocationSlots      = ytv1.LocationSpec{
 		LocationType: "Slots",
 		Path:         "/yt/hdd2/slots",
+		Quota:        &testLocationSlotsQuota,
 	}
-	testLocationImageCache = ytv1.LocationSpec{
+	testLocationImageCacheQuota = resource.MustParse("4Gi")
+	testLocationImageCache      = ytv1.LocationSpec{
 		LocationType: "ImageCache",
 		Path:         "/yt/hdd1/images",
+		Quota:        &testLocationImageCacheQuota,
 	}
 	testVolumeMounts = []corev1.VolumeMount{
 		{
@@ -76,6 +102,11 @@ var (
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 				StorageClassName: &testStorageClassname,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("10Gi"),
+					},
+				},
 			},
 		},
 	}
@@ -101,10 +132,28 @@ func TestGetControllerAgentsConfig(t *testing.T) {
 }
 
 func TestGetDataNodeConfig(t *testing.T) {
-	g := NewLocalNodeGenerator(getYtsaurusWithEverything(), testClusterDomain)
-	cfg, err := g.GetDataNodeConfig(getDataNodeSpec())
-	require.NoError(t, err)
-	canonize.Assert(t, cfg)
+	cases := map[string]struct {
+		Location ytv1.LocationSpec
+	}{
+		"without-trash-ttl": {
+			Location: testLocationChunkStore,
+		},
+		"with-trash-ttl": {
+			Location: testLocationChunkStoreMaxTrash,
+		},
+		"with-watermark": {
+			Location: testLocationChunkStoreWatermark,
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			g := NewLocalNodeGenerator(getYtsaurusWithEverything(), testClusterDomain)
+			cfg, err := g.GetDataNodeConfig(getDataNodeSpec(test.Location))
+			require.NoError(t, err)
+			canonize.Assert(t, cfg)
+		})
+	}
 }
 
 func TestGetDataNodeWithoutYtsaurusConfig(t *testing.T) {
@@ -115,7 +164,7 @@ func TestGetDataNodeWithoutYtsaurusConfig(t *testing.T) {
 		getMasterConnectionSpecWithFixedMasterHosts(),
 		getMasterCachesSpecWithFixedHosts(),
 	)
-	cfg, err := g.GetDataNodeConfig(getDataNodeSpec())
+	cfg, err := g.GetDataNodeConfig(getDataNodeSpec(testLocationChunkStore))
 	require.NoError(t, err)
 	canonize.Assert(t, cfg)
 }
@@ -129,23 +178,66 @@ func TestGetDiscoveryConfig(t *testing.T) {
 }
 
 func TestGetExecNodeConfig(t *testing.T) {
-	g := NewLocalNodeGenerator(getYtsaurusWithEverything(), testClusterDomain)
-	cfg, err := g.GetExecNodeConfig(getExecNodeSpec())
-	require.NoError(t, err)
-	canonize.Assert(t, cfg)
+	cases := map[string]struct {
+		JobResources *corev1.ResourceRequirements
+	}{
+		"without-job-resources": {
+			JobResources: nil,
+		},
+		"with-job-resources": {
+			JobResources: &testJobResourceReqs,
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			g := NewLocalNodeGenerator(getYtsaurusWithEverything(), testClusterDomain)
+			cfg, err := g.GetExecNodeConfig(getExecNodeSpec(test.JobResources))
+			require.NoError(t, err)
+			canonize.Assert(t, cfg)
+		})
+	}
 }
 
 func TestGetExecNodeConfigWithCri(t *testing.T) {
 	g := NewLocalNodeGenerator(getYtsaurusWithEverything(), testClusterDomain)
-	spec := withCri(getExecNodeSpec())
-	cfg, err := g.GetExecNodeConfig(spec)
-	require.NoError(t, err)
-	canonize.Assert(t, cfg)
+
+	cases := map[string]struct {
+		JobResources *corev1.ResourceRequirements
+		Isolated     bool
+	}{
+		"isolated-containers-without-job-resources": {
+			JobResources: nil,
+			Isolated:     true,
+		},
+		"isolated-containers-with-job-resources": {
+			JobResources: &testJobResourceReqs,
+			Isolated:     true,
+		},
+		"single-container-without-job-resources": {
+			JobResources: nil,
+			Isolated:     false,
+		},
+		"single-container-with-job-resources": {
+			JobResources: &testJobResourceReqs,
+			Isolated:     false,
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			spec := withCri(getExecNodeSpec(nil), test.JobResources, test.Isolated)
+			cfg, err := g.GetExecNodeConfig(spec)
+			require.NoError(t, err)
+			canonize.Assert(t, cfg)
+		})
+	}
 }
 
 func TestGetContainerdConfig(t *testing.T) {
 	g := NewLocalNodeGenerator(getYtsaurusWithEverything(), testClusterDomain)
-	spec := withCri(getExecNodeSpec())
+
+	spec := withCri(getExecNodeSpec(nil), nil, false)
 	cfg, err := g.GetContainerdConfig(&spec)
 	require.NoError(t, err)
 	canonize.Assert(t, cfg)
@@ -159,7 +251,7 @@ func TestGetExecNodeWithoutYtsaurusConfig(t *testing.T) {
 		getMasterConnectionSpecWithFixedMasterHosts(),
 		getMasterCachesSpecWithFixedHosts(),
 	)
-	cfg, err := g.GetExecNodeConfig(getExecNodeSpec())
+	cfg, err := g.GetExecNodeConfig(getExecNodeSpec(nil))
 	require.NoError(t, err)
 	canonize.Assert(t, cfg)
 }
@@ -281,8 +373,22 @@ func TestGetUIClustersConfig(t *testing.T) {
 	canonize.Assert(t, cfg)
 }
 
+func TestGetUIClustersConfigWithSettings(t *testing.T) {
+	g := NewGenerator(withUICustom(getYtsaurus()), testClusterDomain)
+	cfg, err := g.GetUIClustersConfig()
+	require.NoError(t, err)
+	canonize.Assert(t, cfg)
+}
+
 func TestGetUICustomConfig(t *testing.T) {
 	g := NewGenerator(withUICustom(getYtsaurus()), testClusterDomain)
+	cfg, err := g.GetUICustomConfig()
+	require.NoError(t, err)
+	canonize.Assert(t, cfg)
+}
+
+func TestGetUICustomConfigWithSettings(t *testing.T) {
+	g := NewGenerator(withUICustomSettings(getYtsaurus()), testClusterDomain)
 	cfg, err := g.GetUICustomConfig()
 	require.NoError(t, err)
 	canonize.Assert(t, cfg)
@@ -323,10 +429,10 @@ func getYtsaurus() *ytv1.Ytsaurus {
 
 			PrimaryMasters: ytv1.MastersSpec{
 				MasterConnectionSpec:   getMasterConnectionSpec(),
-				MaxSnapshotCountToKeep: ptr.Int(1543),
+				MaxSnapshotCountToKeep: ptr.To(1543),
 				InstanceSpec: ytv1.InstanceSpec{
 					InstanceCount:  1,
-					MonitoringPort: ptr.Int32(consts.MasterMonitoringPort),
+					MonitoringPort: ptr.To(int32(consts.MasterMonitoringPort)),
 
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -401,6 +507,10 @@ func getYtsaurus() *ytv1.Ytsaurus {
 						},
 					},
 				},
+
+				Sidecars: []string{
+					"{name: sleep, image: fakeimage:stable, command: [/bin/sleep], args: [inf]}",
+				},
 			},
 		},
 	}
@@ -426,7 +536,7 @@ func getYtsaurusWithEverything() *ytv1.Ytsaurus {
 func withControllerAgents(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.ControllerAgents = &ytv1.ControllerAgentsSpec{InstanceSpec: testBasicInstanceSpec}
 	ytsaurus.Spec.UsePorto = true
-	ytsaurus.Spec.ControllerAgents.InstanceSpec.MonitoringPort = ptr.Int32(consts.ControllerAgentMonitoringPort)
+	ytsaurus.Spec.ControllerAgents.InstanceSpec.MonitoringPort = ptr.To(int32(consts.ControllerAgentMonitoringPort))
 	return ytsaurus
 }
 
@@ -453,19 +563,19 @@ func withResolverConfigured(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 
 func withDiscovery(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.Discovery = ytv1.DiscoverySpec{InstanceSpec: testBasicInstanceSpec}
-	ytsaurus.Spec.Discovery.InstanceSpec.MonitoringPort = ptr.Int32(consts.DiscoveryMonitoringPort)
+	ytsaurus.Spec.Discovery.InstanceSpec.MonitoringPort = ptr.To(int32(consts.DiscoveryMonitoringPort))
 	return ytsaurus
 }
 
 func withQueryTracker(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.QueryTrackers = &ytv1.QueryTrackerSpec{InstanceSpec: testBasicInstanceSpec}
-	ytsaurus.Spec.QueryTrackers.InstanceSpec.MonitoringPort = ptr.Int32(consts.QueryTrackerMonitoringPort)
+	ytsaurus.Spec.QueryTrackers.InstanceSpec.MonitoringPort = ptr.To(int32(consts.QueryTrackerMonitoringPort))
 	return ytsaurus
 }
 
 func withQueueAgent(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.QueueAgents = &ytv1.QueueAgentSpec{InstanceSpec: testBasicInstanceSpec}
-	ytsaurus.Spec.QueueAgents.InstanceSpec.MonitoringPort = ptr.Int32(consts.QueueAgentMonitoringPort)
+	ytsaurus.Spec.QueueAgents.InstanceSpec.MonitoringPort = ptr.To(int32(consts.QueueAgentMonitoringPort))
 	return ytsaurus
 }
 
@@ -480,7 +590,7 @@ func withStrawberry(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 
 func withScheduler(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.Schedulers = &ytv1.SchedulersSpec{InstanceSpec: testBasicInstanceSpec}
-	ytsaurus.Spec.Schedulers.InstanceSpec.MonitoringPort = ptr.Int32(consts.SchedulerMonitoringPort)
+	ytsaurus.Spec.Schedulers.InstanceSpec.MonitoringPort = ptr.To(int32(consts.SchedulerMonitoringPort))
 	return ytsaurus
 }
 
@@ -497,7 +607,7 @@ func withTCPProxies(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 			PortCount:    20000,
 		},
 	}
-	ytsaurus.Spec.TCPProxies[0].InstanceSpec.MonitoringPort = ptr.Int32(consts.TCPProxyMonitoringPort)
+	ytsaurus.Spec.TCPProxies[0].InstanceSpec.MonitoringPort = ptr.To(int32(consts.TCPProxyMonitoringPort))
 	return ytsaurus
 }
 
@@ -515,37 +625,49 @@ func withUI(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 
 func withUICustom(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	odinUrl := "http://odin-webservice.odin.svc.cluster.local"
+	externalProxy := "https://my-external-proxy.example.com"
 	ytsaurus.Spec.UI = &ytv1.UISpec{
-		OdinBaseUrl: &odinUrl,
+		ExternalProxy: &externalProxy,
+		OdinBaseUrl:   &odinUrl,
+		Secure:        true,
+	}
+	return ytsaurus
+}
+
+func withUICustomSettings(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
+	odinUrl := "http://odin-webservice.odin.svc.cluster.local"
+	ytsaurus.Spec.UI = &ytv1.UISpec{
+		OdinBaseUrl:    &odinUrl,
+		DirectDownload: nil,
 	}
 	return ytsaurus
 }
 
 func withMasterCaches(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.MasterCaches = &ytv1.MasterCachesSpec{InstanceSpec: testBasicInstanceSpec}
-	ytsaurus.Spec.MasterCaches.InstanceSpec.MonitoringPort = ptr.Int32(consts.MasterCachesMonitoringPort)
+	ytsaurus.Spec.MasterCaches.InstanceSpec.MonitoringPort = ptr.To(int32(consts.MasterCachesMonitoringPort))
 	return ytsaurus
 }
 
 func withYQLAgent(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.YQLAgents = &ytv1.YQLAgentSpec{InstanceSpec: testBasicInstanceSpec}
-	ytsaurus.Spec.YQLAgents.InstanceSpec.MonitoringPort = ptr.Int32(consts.YQLAgentMonitoringPort)
+	ytsaurus.Spec.YQLAgents.InstanceSpec.MonitoringPort = ptr.To(int32(consts.YQLAgentMonitoringPort))
 	return ytsaurus
 }
 
 func withFixedMasterCachesHosts(ytsaurus *ytv1.Ytsaurus) *ytv1.Ytsaurus {
 	ytsaurus.Spec.MasterCaches.MasterCachesConnectionSpec.HostAddresses = testMasterCachesExternalHosts
-	ytsaurus.Spec.MasterCaches.InstanceSpec.MonitoringPort = ptr.Int32(consts.MasterCachesMonitoringPort)
+	ytsaurus.Spec.MasterCaches.InstanceSpec.MonitoringPort = ptr.To(int32(consts.MasterCachesMonitoringPort))
 	return ytsaurus
 }
 
-func getDataNodeSpec() ytv1.DataNodesSpec {
+func getDataNodeSpec(locations ...ytv1.LocationSpec) ytv1.DataNodesSpec {
 	return ytv1.DataNodesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:        20,
-			MonitoringPort:       ptr.Int32(consts.DataNodeMonitoringPort),
+			MonitoringPort:       ptr.To(int32(consts.DataNodeMonitoringPort)),
 			Resources:            testResourceReqs,
-			Locations:            []ytv1.LocationSpec{testLocationChunkStore},
+			Locations:            locations,
 			VolumeMounts:         testVolumeMounts,
 			VolumeClaimTemplates: testVolumeClaimTemplates,
 		},
@@ -554,13 +676,13 @@ func getDataNodeSpec() ytv1.DataNodesSpec {
 	}
 }
 
-func getExecNodeSpec() ytv1.ExecNodesSpec {
+func getExecNodeSpec(jobResources *corev1.ResourceRequirements) ytv1.ExecNodesSpec {
 	rotationPolicyMS := int64(900000)
-	rotationPolicyMaxTotalSize := int64(3145728)
+	rotationPolicyMaxTotalSize := resource.MustParse("3145728")
 	return ytv1.ExecNodesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:  50,
-			MonitoringPort: ptr.Int32(consts.ExecNodeMonitoringPort),
+			MonitoringPort: ptr.To(int32(consts.ExecNodeMonitoringPort)),
 			Resources:      testResourceReqs,
 			Locations: []ytv1.LocationSpec{
 				testLocationChunkCache,
@@ -569,6 +691,7 @@ func getExecNodeSpec() ytv1.ExecNodesSpec {
 			VolumeMounts:         testVolumeMounts,
 			VolumeClaimTemplates: testVolumeClaimTemplates,
 		},
+		JobResources:     jobResources,
 		ClusterNodesSpec: testClusterNodeSpec,
 		JobProxyLoggers: []ytv1.TextLoggerSpec{
 			{
@@ -593,19 +716,20 @@ func getExecNodeSpec() ytv1.ExecNodesSpec {
 	}
 }
 
-func withCri(spec ytv1.ExecNodesSpec) ytv1.ExecNodesSpec {
+func withCri(spec ytv1.ExecNodesSpec, jobResources *corev1.ResourceRequirements, isolated bool) ytv1.ExecNodesSpec {
 	spec.Locations = append(spec.Locations, testLocationImageCache)
-	spec.JobResources = &testResourceReqs
+	spec.JobResources = jobResources
 	spec.JobEnvironment = &ytv1.JobEnvironmentSpec{
-		UserSlots: ptr.Int(42),
+		UserSlots: ptr.To(int(42)),
 		CRI: &ytv1.CRIJobEnvironmentSpec{
-			SandboxImage:           ptr.String("registry.k8s.io/pause:3.8"),
-			APIRetryTimeoutSeconds: ptr.Int32(120),
-			CRINamespace:           ptr.String("yt"),
-			BaseCgroup:             ptr.String("/yt"),
+			SandboxImage:           ptr.To("registry.k8s.io/pause:3.8"),
+			APIRetryTimeoutSeconds: ptr.To(int32(120)),
+			CRINamespace:           ptr.To("yt"),
+			BaseCgroup:             ptr.To("/yt"),
 		},
-		UseArtifactBinds: ptr.Bool(true),
-		DoNotSetUserId:   ptr.Bool(true),
+		UseArtifactBinds: ptr.To(true),
+		DoNotSetUserId:   ptr.To(true),
+		Isolated:         ptr.To(isolated),
 	}
 	return spec
 }
@@ -614,7 +738,7 @@ func getTabletNodeSpec() ytv1.TabletNodesSpec {
 	return ytv1.TabletNodesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:  100,
-			MonitoringPort: ptr.Int32(consts.TabletNodeMonitoringPort),
+			MonitoringPort: ptr.To(int32(consts.TabletNodeMonitoringPort)),
 			Resources:      testResourceReqs,
 			Locations: []ytv1.LocationSpec{
 				testLocationChunkCache,
@@ -633,7 +757,7 @@ func getHTTPProxySpec() ytv1.HTTPProxiesSpec {
 	return ytv1.HTTPProxiesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:  3,
-			MonitoringPort: ptr.Int32(consts.HTTPProxyMonitoringPort),
+			MonitoringPort: ptr.To(int32(consts.HTTPProxyMonitoringPort)),
 		},
 		ServiceType: corev1.ServiceTypeNodePort,
 		Role:        "control",
@@ -649,7 +773,7 @@ func getRPCProxySpec() ytv1.RPCProxiesSpec {
 	return ytv1.RPCProxiesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:  3,
-			MonitoringPort: ptr.Int32(consts.RPCProxyMonitoringPort),
+			MonitoringPort: ptr.To(int32(consts.RPCProxyMonitoringPort)),
 		},
 		Role: "default",
 	}
@@ -659,7 +783,7 @@ func getTCPProxySpec() ytv1.TCPProxiesSpec {
 	return ytv1.TCPProxiesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:  3,
-			MonitoringPort: ptr.Int32(consts.TCPProxyMonitoringPort),
+			MonitoringPort: ptr.To(int32(consts.TCPProxyMonitoringPort)),
 		},
 		Role: "default",
 	}
@@ -690,7 +814,7 @@ func getMasterCachesSpec() ytv1.MasterCachesSpec {
 	return ytv1.MasterCachesSpec{
 		InstanceSpec: ytv1.InstanceSpec{
 			InstanceCount:  3,
-			MonitoringPort: ptr.Int32(consts.MasterCachesMonitoringPort),
+			MonitoringPort: ptr.To(int32(consts.MasterCachesMonitoringPort)),
 		},
 		HostAddressLabel: "",
 	}

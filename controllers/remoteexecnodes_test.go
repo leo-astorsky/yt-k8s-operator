@@ -10,14 +10,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ptr "k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
-	"github.com/ytsaurus/yt-k8s-operator/controllers"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/testutil"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/controllers"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/testutil"
 )
 
 const (
@@ -202,7 +203,7 @@ func TestRemoteExecNodesStatusRunningWithPods(t *testing.T) {
 
 	nodes := buildRemoteExecNodes(h, remoteYtsaurusName, remoteExecNodesName)
 	nodes.Spec.InstanceSpec.InstanceCount = 1
-	nodes.Spec.InstanceSpec.MinReadyInstanceCount = ptr.Int(1)
+	nodes.Spec.InstanceSpec.MinReadyInstanceCount = ptr.To(1)
 	testutil.DeployObject(h, &nodes)
 	waitRemoteExecNodesDeployed(h, remoteExecNodesName)
 
@@ -256,7 +257,7 @@ func buildRemoteExecNodes(h *testutil.TestHelper, remoteYtsaurusName, remoteExec
 			}),
 			ExecNodesSpec: ytv1.ExecNodesSpec{
 				InstanceSpec: ytv1.InstanceSpec{
-					Image: ptr.String(testYtsaurusImage),
+					Image: ptr.To(testYtsaurusImage),
 					Locations: []ytv1.LocationSpec{
 						{
 							LocationType: ytv1.LocationTypeChunkCache,

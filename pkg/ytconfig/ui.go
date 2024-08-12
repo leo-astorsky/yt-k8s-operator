@@ -14,6 +14,7 @@ type UICluster struct {
 	ID             string               `yson:"id"`
 	Name           string               `yson:"name"`
 	Proxy          string               `yson:"proxy"`
+	ExternalProxy  *string              `yson:"externalProxy,omitempty"`
 	Secure         bool                 `yson:"secure"`
 	Authentication UIAuthenticationType `yson:"authentication"`
 	Group          string               `yson:"group"`
@@ -36,6 +37,11 @@ func getUIClusterCarcass() UICluster {
 	}
 }
 
+type UICustomSettings struct {
+	DirectDownload *bool `yson:"directDownload,omitempty"`
+}
+
 type UICustom struct {
-	OdinBaseUrl *string `yson:"odinBaseUrl,omitempty"`
+	OdinBaseUrl *string           `yson:"odinBaseUrl,omitempty"`
+	Settings    *UICustomSettings `yson:"uiSettings,omitempty"`
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	labeller2 "github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	labeller2 "github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -63,7 +63,7 @@ func (s *MonitoringService) Build() *corev1.Service {
 		Selector: s.labeller.GetSelectorLabelMap(),
 		Ports: []corev1.ServicePort{
 			{
-				Name:       consts.YTMonitoringPortName,
+				Name:       consts.YTMonitoringServicePortName,
 				Port:       consts.YTMonitoringPort,
 				TargetPort: intstr.IntOrString{IntVal: s.monitoringTargetPort},
 			},

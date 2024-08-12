@@ -6,8 +6,14 @@ IMG ?= ${OPERATOR_IMAGE}:${OPERATOR_TAG}
 KIND_CLUSTER_NAME ?= ${USER}-yt-kind
 export KIND_CLUSTER_NAME
 
+## Path to kind cluster config.
+KIND_CLUSTER_CONFIG =
+
+## K8s context for kind cluster
+KIND_KUBE_CONTEXT = kind-$(KIND_CLUSTER_NAME)
+
 ## K8s namespace for sample cluster.
-YTSAURUS_NAMESPACE ?= ytsaurus
+YTSAURUS_NAMESPACE ?= ytsaurus-dev
 
 ## YTsaurus spec for sample cluster.
 YTSAURUS_SPEC ?= config/samples/cluster_v1_cri.yaml
@@ -22,6 +28,7 @@ OPERATOR_IMAGE = ytsaurus/k8s-operator
 OPERATOR_TAG = 0.0.0-alpha
 
 OPERATOR_CHART = ytop-chart
+OPERATOR_CHART_CRDS = $(OPERATOR_CHART)/templates/crds
 OPERATOR_INSTANCE = ytsaurus-dev
 
 ## K8s namespace for YTsaurus operator.
@@ -33,7 +40,7 @@ else
 DOCKER_BUILD_ARGS += --build-arg VERSION="$(OPERATOR_TAG)"
 endif
 DOCKER_BUILD_ARGS += --build-arg REVISION="$(shell git rev-parse HEAD)"
-DOCKER_BUILD_ARGS += --build-arg BUILD_DATE="$(shell date --rfc-3339=seconds)"
+DOCKER_BUILD_ARGS += --build-arg BUILD_DATE="$(shell date -Iseconds -u)"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -132,19 +139,65 @@ canonize: manifests generate fmt vet envtest ## Canonize test results.
 
 ##@ K8s operations
 
+KIND_CLUSTER_CREATE_FLAGS = -v 100 --wait 120s  --retain
+ifneq (${KIND_CLUSTER_CONFIG},)
+  KIND_CLUSTER_CREATE_FLAGS  += --config ${KIND_CLUSTER_CONFIG}
+endif
+
 .PHONY: kind-create-cluster
 kind-create-cluster: kind ## Create kind kubernetes cluster.
 	@if ! $(KIND) get clusters | grep -q $(KIND_CLUSTER_NAME); then \
-		$(KIND) create cluster --name $(KIND_CLUSTER_NAME) -v 100 --wait 120s  --retain; \
+		$(KIND) create cluster --name $(KIND_CLUSTER_NAME) $(KIND_CLUSTER_CREATE_FLAGS); \
 	fi
-	$(KUBECTL) config use-context kind-$(KIND_CLUSTER_NAME)
 	$(MAKE) k8s-install-cert-manager
+
+.PHONY: kind-create-cluster-with-registry
+kind-create-cluster-with-registry:
+	$(MAKE) kind-create-cluster KIND_CLUSTER_CONFIG=config/kind/kind-with-registry.yaml
+
+.PHONY: kind-use-context
+kind-use-context: ## Switch kubectl default context and namespace.
+	$(KUBECTL) config set-context $(KIND_KUBE_CONTEXT) --namespace $(YTSAURUS_NAMESPACE)
+	$(KUBECTL) config use-context $(KIND_KUBE_CONTEXT)
 
 .PHONY: kind-delete-cluster
 kind-delete-cluster: kind ## Delete kind kubernetes cluster.
 	@if $(KIND) get clusters | grep -q $(KIND_CLUSTER_NAME); then \
 		$(KIND) delete cluster --name $(KIND_CLUSTER_NAME); \
 	fi
+
+# https://github.com/containerd/containerd/blob/main/docs/hosts.md
+# https://distribution.github.io/distribution/about/configuration/
+# https://kind.sigs.k8s.io/docs/user/local-registry/
+
+REGISTRY_CONFIG_DIR=config/registry
+
+REGISTRY_LOCAL_PORT = 5000
+REGISTRY_LOCAL_ADDR = localhost:${REGISTRY_LOCAL_PORT}
+REGISTRY_LOCAL_NAME = ${USER}-registry-localhost-${REGISTRY_LOCAL_PORT}
+
+define REGISTRY_LOCAL_CONFIG
+server = "http://${REGISTRY_LOCAL_NAME}:5000"
+
+[host."http://${REGISTRY_LOCAL_NAME}:5000"]
+  capabilities = ["pull", "resolve", "push"]
+  skip_verify = true
+endef
+export REGISTRY_LOCAL_CONFIG
+
+kind-create-local-registry: ## Create local docker registry for kind kubernetes cluster.
+	docker run --name ${REGISTRY_LOCAL_NAME} -d --restart=always \
+		--mount type=volume,src=${REGISTRY_LOCAL_NAME},dst=/var/lib/registry \
+		-p "127.0.0.1:${REGISTRY_LOCAL_PORT}:5000" \
+		registry:2
+	docker network connect "kind" ${REGISTRY_LOCAL_NAME}
+	mkdir -p ${REGISTRY_CONFIG_DIR}/${REGISTRY_LOCAL_ADDR}
+	echo "$$REGISTRY_LOCAL_CONFIG" >${REGISTRY_CONFIG_DIR}/${REGISTRY_LOCAL_ADDR}/hosts.toml
+
+kind-delete-local-registry: ## Delete local docker registry.
+	docker rm -f ${REGISTRY_LOCAL_NAME}
+	docker volume rm ${REGISTRY_LOCAL_NAME}
+	rm -fr "${REGISTRY_CONFIG_DIR}/${REGISTRY_LOCAL_ADDR}"
 
 TEST_IMAGES = \
 	ytsaurus/ytsaurus-nightly:dev-23.1-28ccaedbf353b870bedafb6e881ecf386a0a3779 \
@@ -189,6 +242,7 @@ helm-minikube-install: helm-chart ## Build docker image in minikube and install 
 helm-uninstall: ## Uninstal helm chart.
 	$(HELM) uninstall -n $(OPERATOR_NAMESPACE) $(OPERATOR_INSTANCE)
 
+.PHONY: kind-deploy-ytsaurus
 kind-deploy-ytsaurus: ## Deploy sample ytsaurus cluster and all requirements.
 	$(MAKE) kind-create-cluster
 	$(MAKE) helm-kind-install
@@ -197,7 +251,9 @@ kind-deploy-ytsaurus: ## Deploy sample ytsaurus cluster and all requirements.
 	$(KUBECTL) wait -n $(YTSAURUS_NAMESPACE) --timeout=10m --for=jsonpath='{.status.state}=Running' --all ytsaurus
 	$(MAKE) kind-yt-info
 
+.PHONY: kind-undeploy-ytsaurus
 kind-undeploy-ytsaurus: ## Undeploy sample ytsaurus cluster.
+	$(KUBECTL) get namespace $(YTSAURUS_NAMESPACE)
 	-$(KUBECTL) -n $(YTSAURUS_NAMESPACE) delete ytsaurus --all
 	-$(KUBECTL) -n $(YTSAURUS_NAMESPACE) delete pods --all --force
 	$(KUBECTL) delete namespace $(YTSAURUS_NAMESPACE)
@@ -213,6 +269,7 @@ kind-yt-env: ## Print yt cli environment for sample ytsaurus cluster.
 	@printf "export \"%s\"\n" $(KIND_YT_ENV)
 
 kind-yt-info:
+	@printf "Kind k8s context: $(KIND_KUBE_CONTEXT) namespace: $(YTSAURUS_NAMESPACE)\nto set kubectl default context run: make kind-use-context\n\n"
 	@printf "YTsaurus UI: http://%s:%s\nlogin/password: admin/password\nto setup env for yt cli run: . <(make kind-yt-env)\n" \
 		$(call KIND_NODE_ADDR,${KIND_CLUSTER_NAME}-control-plane) \
 		$(call KIND_SERVICE_NODEPORT,${YTSAURUS_NAMESPACE},ytsaurus-ui,0)
@@ -236,8 +293,9 @@ docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
 .PHONY: helm-chart
-helm-chart: manifests kustomize helmify ## Generate helm chart.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) $(OPERATOR_CHART)
+helm-chart: manifests kustomize envsubst kubectl-slice ## Generate helm chart.
+	$(KUSTOMIZE) build config/helm | name="$(OPERATOR_CHART)" $(ENVSUBST) | $(KUBECTL_SLICE) -q -o $(OPERATOR_CHART_CRDS) -t "{{.metadata.name}}.yaml" --prune
+	name="$(OPERATOR_CHART)" version="$(RELEASE_VERSION)" $(ENVSUBST) < config/helm/Chart.yaml > $(OPERATOR_CHART)/Chart.yaml
 
 ##@ Deployment
 
@@ -269,15 +327,16 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
-release: kustomize ## Release operator docker imager and helm chart.
+release: kustomize ## Release operator docker image and helm chart.
 	docker build ${DOCKER_BUILD_ARGS} -t $(OPERATOR_IMAGE):${RELEASE_VERSION} .
 	docker push $(OPERATOR_IMAGE):${RELEASE_VERSION}
+	docker tag $(OPERATOR_IMAGE):${RELEASE_VERSION} ghcr.io/$(OPERATOR_IMAGE):${RELEASE_VERSION}
+	docker push ghcr.io/$(OPERATOR_IMAGE):${RELEASE_VERSION}
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(OPERATOR_IMAGE):${RELEASE_VERSION}
 	$(MAKE) helm-chart
-	sed -iE "s/appVersion: \".*\"/appVersion: \"${RELEASE_VERSION}\"/" $(OPERATOR_CHART)/Chart.yaml
-	sed -iE "s/version:.*/version: ${RELEASE_VERSION}/" $(OPERATOR_CHART)/Chart.yaml
 	helm package $(OPERATOR_CHART)
 	helm push $(OPERATOR_CHART)-${RELEASE_VERSION}.tgz oci://registry-1.docker.io/ytsaurus
+	helm push $(OPERATOR_CHART)-${RELEASE_VERSION}.tgz oci://ghcr.io/ytsaurus
 
 ##@ Build Dependencies
 
@@ -287,22 +346,22 @@ $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
 # Tool Binaries
-KUBECTL ?= kubectl
-HELM ?= helm
+KUBECTL ?= kubectl --context $(KIND_KUBE_CONTEXT)
+HELM ?= helm --kube-context $(KIND_KUBE_CONTEXT)
 KUSTOMIZE ?= $(LOCALBIN)/kustomize-$(KUSTOMIZE_VERSION)
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen-$(CONTROLLER_GEN_VERSION)
 ENVTEST ?= $(LOCALBIN)/setup-envtest-$(ENVTEST_VERSION)
-HELMIFY ?= $(LOCALBIN)/helmify-$(HELMIFY_VERSION)
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint-$(GOLANGCI_LINT_VERSION)
 GINKGO ?= $(LOCALBIN)/ginkgo-$(GINKGO_VERSION)
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs-$(CRD_REF_DOCS_VERSION)
 KIND ?= $(LOCALBIN)/kind-$(KIND_VERSION)
+ENVSUBST ?= $(LOCALBIN)/envsubst-$(ENVSUBST_VERSION)
+KUBECTL_SLICE ?= $(LOCALBIN)/kubectl-slice-$(KUBECTL_SLICE_VERSION)
 
 # Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
 CONTROLLER_GEN_VERSION ?= v0.14.0
 ENVTEST_VERSION ?= latest
-HELMIFY_VERSION ?= v0.4.5
 ## golangci-lint version.
 GOLANGCI_LINT_VERSION ?= v1.56.2
 GINKGO_VERSION ?= $(call go-get-version,github.com/onsi/ginkgo/v2)
@@ -310,6 +369,8 @@ CRD_REF_DOCS_VERSION ?= v0.0.12
 ## kind version.
 KIND_VERSION ?= v0.22.0
 CERT_MANAGER_VERSION ?= v1.14.4
+ENVSUBST_VERSION ?= v1.4.2
+KUBECTL_SLICE_VERSION ?= v1.3.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -325,11 +386,6 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
-
-.PHONY: helmify
-helmify: $(HELMIFY) ## Download helmify locally if necessary.
-$(HELMIFY): $(LOCALBIN)
-	$(call go-install-tool,$(HELMIFY),github.com/arttor/helmify/cmd/helmify,$(HELMIFY_VERSION))
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
@@ -350,6 +406,16 @@ $(CRD_REF_DOCS): $(LOCALBIN)
 kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-install-tool,$(KIND),sigs.k8s.io/kind,$(KIND_VERSION))
+
+.PHONY: envsubst
+envsubst: $(ENVSUBST) ## Download envsubst locally if necessary.
+$(ENVSUBST): $(LOCALBIN)
+	$(call go-install-tool,$(ENVSUBST),github.com/a8m/envsubst/cmd/envsubst,$(ENVSUBST_VERSION))
+
+.PHONY: kubectl-slice
+kubectl-slice: $(KUBECTL_SLICE) ## Download kubectl-slice locally if necessary.
+$(KUBECTL_SLICE): $(LOCALBIN)
+	$(call go-install-tool,$(KUBECTL_SLICE),github.com/patrickdappollonio/kubectl-slice,$(KUBECTL_SLICE_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary (ideally with version)

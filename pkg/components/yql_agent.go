@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"strings"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type YqlAgent struct {
@@ -37,7 +37,7 @@ func NewYQLAgent(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus, master 
 	}
 
 	if resource.Spec.YQLAgents.InstanceSpec.MonitoringPort == nil {
-		resource.Spec.YQLAgents.InstanceSpec.MonitoringPort = ptr.Int32(consts.YQLAgentMonitoringPort)
+		resource.Spec.YQLAgents.InstanceSpec.MonitoringPort = ptr.To(int32(consts.YQLAgentMonitoringPort))
 	}
 
 	srv := newServer(
@@ -51,6 +51,11 @@ func NewYQLAgent(cfgen *ytconfig.Generator, ytsaurus *apiproxy.Ytsaurus, master 
 		func() ([]byte, error) {
 			return cfgen.GetYQLAgentConfig(resource.Spec.YQLAgents)
 		},
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.YQLAgentRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	return &YqlAgent{

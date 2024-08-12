@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"strings"
 
-	"go.ytsaurus.tech/library/go/ptr"
+	"k8s.io/utils/ptr"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	ytv1 "github.com/ytsaurus/yt-k8s-operator/api/v1"
+	ytv1 "github.com/ytsaurus/ytsaurus-k8s-operator/api/v1"
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/ytsaurus/yt-k8s-operator/pkg/apiproxy"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/consts"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/labeller"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/resources"
-	"github.com/ytsaurus/yt-k8s-operator/pkg/ytconfig"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/apiproxy"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/consts"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/labeller"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/resources"
+	"github.com/ytsaurus/ytsaurus-k8s-operator/pkg/ytconfig"
 )
 
 type Scheduler struct {
@@ -45,7 +46,7 @@ func NewScheduler(
 	}
 
 	if resource.Spec.Schedulers.InstanceSpec.MonitoringPort == nil {
-		resource.Spec.Schedulers.InstanceSpec.MonitoringPort = ptr.Int32(consts.SchedulerMonitoringPort)
+		resource.Spec.Schedulers.InstanceSpec.MonitoringPort = ptr.To(int32(consts.SchedulerMonitoringPort))
 	}
 
 	srv := newServer(
@@ -59,6 +60,11 @@ func NewScheduler(
 		func() ([]byte, error) {
 			return cfgen.GetSchedulerConfig(resource.Spec.Schedulers)
 		},
+		WithContainerPorts(corev1.ContainerPort{
+			Name:          consts.YTRPCPortName,
+			ContainerPort: consts.SchedulerRPCPort,
+			Protocol:      corev1.ProtocolTCP,
+		}),
 	)
 
 	return &Scheduler{
@@ -229,15 +235,15 @@ func (s *Scheduler) updateOpArchive(ctx context.Context, dry bool) (*ComponentSt
 	case ytv1.UpdateStateWaitingForOpArchiveUpdatingPrepare:
 		if !s.needOpArchiveInit() {
 			s.setConditionNotNecessaryToUpdateOpArchive(ctx)
-			return ptr.T(SimpleStatus(SyncStatusUpdating)), nil
+			return ptr.To(SimpleStatus(SyncStatusUpdating)), nil
 		}
 		if !s.initOpArchive.isRestartPrepared() {
-			return ptr.T(SimpleStatus(SyncStatusUpdating)), s.initOpArchive.prepareRestart(ctx, dry)
+			return ptr.To(SimpleStatus(SyncStatusUpdating)), s.initOpArchive.prepareRestart(ctx, dry)
 		}
 		if !dry {
 			s.setConditionOpArchivePreparedForUpdating(ctx)
 		}
-		return ptr.T(SimpleStatus(SyncStatusUpdating)), err
+		return ptr.To(SimpleStatus(SyncStatusUpdating)), err
 	case ytv1.UpdateStateWaitingForOpArchiveUpdate:
 		if !s.initOpArchive.isRestartCompleted() {
 			return nil, nil
@@ -245,7 +251,7 @@ func (s *Scheduler) updateOpArchive(ctx context.Context, dry bool) (*ComponentSt
 		if !dry {
 			s.setConditionOpArchiveUpdated(ctx)
 		}
-		return ptr.T(SimpleStatus(SyncStatusUpdating)), err
+		return ptr.To(SimpleStatus(SyncStatusUpdating)), err
 	default:
 		return nil, nil
 	}
