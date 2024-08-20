@@ -240,7 +240,7 @@ _Appears in:_
 | `useIpv6` _boolean_ |  | false |  |
 | `useIpv4` _boolean_ |  | false |  |
 | `keepSocket` _boolean_ |  | true |  |
-| `forceTcp` _boolean_ |  | false |  |
+| `forceTCP` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
 | `hostNetwork` _boolean_ | Use the host's network namespace for all components. | false |  |
 | `usePorto` _boolean_ |  | false |  |
@@ -1148,7 +1148,7 @@ _Appears in:_
 | `useIpv6` _boolean_ |  | false |  |
 | `useIpv4` _boolean_ |  | false |  |
 | `keepSocket` _boolean_ |  | true |  |
-| `forceTcp` _boolean_ |  | false |  |
+| `forceTCP` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
 | `hostNetwork` _boolean_ | Use the host's network namespace for all components. | false |  |
 | `usePorto` _boolean_ |  | false |  |
@@ -1666,8 +1666,7 @@ Ytsaurus is the Schema for the ytsaurus API
 
 
 
-_Appears in:_
-- [YtsaurusValidator](#ytsaurusvalidator)
+
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1698,7 +1697,7 @@ _Appears in:_
 | `useIpv6` _boolean_ |  | false |  |
 | `useIpv4` _boolean_ |  | false |  |
 | `keepSocket` _boolean_ |  | true |  |
-| `forceTcp` _boolean_ |  | false |  |
+| `forceTCP` _boolean_ |  | false |  |
 | `useShortNames` _boolean_ |  | true |  |
 | `hostNetwork` _boolean_ | Use the host's network namespace for all components. | false |  |
 | `usePorto` _boolean_ |  | false |  |
@@ -1731,8 +1730,6 @@ _Appears in:_
 | `yqlAgents` _[YQLAgentSpec](#yqlagentspec)_ |  |  |  |
 | `queueAgents` _[QueueAgentSpec](#queueagentspec)_ |  |  |  |
 | `ui` _[UISpec](#uispec)_ |  |  |  |
-
-
 
 
 

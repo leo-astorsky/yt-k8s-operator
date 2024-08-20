@@ -10024,7 +10024,7 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
-              forceTcp:
+              forceTCP:
                 default: false
                 type: boolean
               hostNetwork:
