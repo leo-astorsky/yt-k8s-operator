@@ -576,8 +576,7 @@ type CommonSpec struct {
 	KeepSocket *bool `json:"keepSocket,omitempty"`
 	//+kubebuilder:default:=false
 	//+optional
-	//nolint:tagliatelle
-	ForceTCP *bool `json:"forceTCP,omitempty"`
+	ForceTCP *bool `json:"forceTcp,omitempty"`
 
 	//+kubebuilder:default:=true
 	//+optional
